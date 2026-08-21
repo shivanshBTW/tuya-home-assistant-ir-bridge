@@ -13,17 +13,24 @@ const start = async () => {
   const jsonStore = new JsonStore(appConfig.dataDir);
   await jsonStore.ensureDataDir();
 
+  let cloudClient: TuyaCloudClient | undefined;
+  let hasResolvedCloudClient = false;
   const getCloudClient = () => {
+    if (hasResolvedCloudClient) {
+      return cloudClient;
+    }
+    hasResolvedCloudClient = true;
     try {
       const tuyaConfig = requireTuyaCloudConfig(appConfig);
-      return new TuyaCloudClient({
+      cloudClient = new TuyaCloudClient({
         apiEndpoint: tuyaConfig.apiEndpoint,
         accessId: tuyaConfig.accessId,
         accessSecret: tuyaConfig.accessSecret,
       });
     } catch {
-      return undefined;
+      cloudClient = undefined;
     }
+    return cloudClient;
   };
 
   const mqttPublisher = new MqttPublisher(appConfig, jsonStore, getCloudClient);
@@ -71,9 +78,7 @@ const start = async () => {
   try {
     await mqttPublisher.start();
   } catch (error) {
-    app.log.warn(
-      `MQTT did not start: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    app.log.warn(`MQTT did not start: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   await app.listen({ host: appConfig.host, port: appConfig.port });

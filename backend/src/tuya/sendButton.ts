@@ -1,8 +1,8 @@
 import { SEND_PATH_CLOUD, SEND_PATH_LOCAL } from '../constants.js';
-import type { Catalog, CatalogButton, SendResult } from '../types.js';
+import type { Catalog, CatalogButton, LocalDevice, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
-import { sendLocalIrCode } from './localSend.js';
+import { probeLocalDevice, sendLocalIrCode } from './localSend.js';
 import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
 const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
@@ -19,9 +19,13 @@ export const shouldSendCatalogButtonLocally = (button: CatalogButton): boolean =
   return Boolean(button.code) && !button.id.includes(':library:');
 };
 
-export const shouldPreferCloudSend = (button: CatalogButton): boolean => {
-  return button.source === 'learned';
-};
+let cachedLocalTarget:
+  | {
+      host: string;
+      version?: string;
+      irSendDp?: string;
+    }
+  | undefined;
 
 export const sendCatalogButton = async ({
   catalog,
@@ -57,24 +61,54 @@ export const sendCatalogButton = async ({
     return { path: SEND_PATH_CLOUD, buttonId: button.id, remoteId: remote.remoteId };
   };
 
+  const resolveLocalDevice = async (): Promise<LocalDevice | undefined> => {
+    if (cachedLocalTarget) {
+      return {
+        ...catalog.local,
+        host: cachedLocalTarget.host,
+        version: cachedLocalTarget.version ?? catalog.local.version,
+        irSendDp: cachedLocalTarget.irSendDp,
+      };
+    }
+
+    const resolveHost = async (shouldScanSubnet: boolean) => {
+      return resolveTuyaLocalHost({
+        configuredIp,
+        configuredMac: configuredMac ?? catalog.local.mac,
+        fallbackHost: catalog.local.host,
+        deviceId: catalog.local.id,
+        shouldScanSubnet,
+      });
+    };
+
+    let resolved = await resolveHost(false);
+    if (!resolved.host) {
+      resolved = await resolveHost(true);
+    }
+    if (!resolved.host) {
+      return undefined;
+    }
+
+    const probed = await probeLocalDevice({
+      ...catalog.local,
+      host: resolved.host,
+      version: resolved.discoveredVersion ?? catalog.local.version,
+    });
+    cachedLocalTarget = {
+      host: probed.host ?? resolved.host,
+      version: probed.version,
+      irSendDp: probed.irSendDp,
+    };
+    return probed;
+  };
+
   const sendViaLocal = async (): Promise<SendResult | undefined> => {
     const irCode = button.code;
     if (!irCode || !shouldSendCatalogButtonLocally(button) || !catalog.local.key) {
       return undefined;
     }
-    const resolved = await resolveTuyaLocalHost({
-      configuredIp,
-      configuredMac: configuredMac ?? catalog.local.mac,
-      fallbackHost: catalog.local.host,
-      deviceId: catalog.local.id,
-      shouldScanSubnet: true,
-    });
-    const localDevice = {
-      ...catalog.local,
-      host: resolved.host,
-      version: resolved.discoveredVersion ?? catalog.local.version,
-    };
-    if (!localDevice.host) {
+    const localDevice = await resolveLocalDevice();
+    if (!localDevice?.host) {
       return undefined;
     }
     try {
@@ -82,6 +116,7 @@ export const sendCatalogButton = async ({
       console.log(`Local IR sent to ${localDevice.host} for ${button.keyName}`);
       return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
     } catch (error) {
+      cachedLocalTarget = undefined;
       console.warn(
         `Local send failed, will try cloud if configured: ${
           error instanceof Error ? error.message : String(error)
@@ -90,18 +125,6 @@ export const sendCatalogButton = async ({
       return undefined;
     }
   };
-
-  if (shouldPreferCloudSend(button) && cloudClient) {
-    try {
-      return await sendViaCloud();
-    } catch (error) {
-      console.warn(
-        `Cloud send failed for ${button.keyName}, will try local: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
-  }
 
   const localResult = await sendViaLocal();
   if (localResult) {

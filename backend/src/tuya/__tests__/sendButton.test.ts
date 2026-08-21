@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { CatalogButton } from '../../types.js';
-import { shouldPreferCloudSend, shouldSendCatalogButtonLocally } from '../sendButton.js';
+import { shouldSendCatalogButtonLocally } from '../sendButton.js';
 
 const button = (overrides: Partial<CatalogButton>): CatalogButton => ({
   id: 'remote:key:power:1',
@@ -38,21 +38,5 @@ describe('shouldSendCatalogButtonLocally', () => {
       ),
       false,
     );
-  });
-});
-
-describe('shouldPreferCloudSend', () => {
-  it('sends learned DIY buttons through Tuya Cloud first', () => {
-    assert.equal(
-      shouldPreferCloudSend(
-        button({
-          id: 'remote:learned:1',
-          source: 'learned',
-          code: 'c422',
-        }),
-      ),
-      true,
-    );
-    assert.equal(shouldPreferCloudSend(button({ source: 'key' })), false);
   });
 });
