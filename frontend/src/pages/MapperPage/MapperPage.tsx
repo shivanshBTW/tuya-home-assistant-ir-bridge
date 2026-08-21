@@ -12,6 +12,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { Controller } from 'react-hook-form';
+import { getButtonDisplayName } from '../../libs/buttonLabel';
 import type { useMapperPage } from './useMapperPage';
 
 type Props = ReturnType<typeof useMapperPage>;
@@ -189,7 +190,7 @@ export const MapperPage: FC<Props> = ({
                   onClick={() => onSelectButton(button.id)}
                   sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
                 >
-                  {button.keyName}
+                  {getButtonDisplayName(button)}
                 </Button>
                 {button.hasCode && <Chip size="small" label="raw" />}
                 <Button

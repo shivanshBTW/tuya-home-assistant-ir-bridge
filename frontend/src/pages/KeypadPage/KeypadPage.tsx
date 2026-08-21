@@ -4,6 +4,7 @@ import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { getButtonDisplayName } from '../../libs/buttonLabel';
 import type { useKeypadPage } from './useKeypadPage';
 
 type Props = ReturnType<typeof useKeypadPage>;
@@ -34,7 +35,7 @@ export const KeypadPage: FC<Props> = ({
               disabled={isTestFirePending}
               onClick={() => onTestFire(button.id)}
             >
-              {button.remoteName}: {button.keyName}
+              {button.remoteName}: {getButtonDisplayName(button)}
             </Button>
           ))}
         </Box>

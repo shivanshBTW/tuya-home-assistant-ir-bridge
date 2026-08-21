@@ -9,6 +9,7 @@ import {
   testFireButton,
   upsertMappingDevice,
 } from '../../libs/services/bridgeApi';
+import { getButtonDisplayName } from '../../libs/buttonLabel';
 import type { DeviceMapping, DeviceTemplateIdAPI } from '../../libs/services/types';
 import type { MapperPageProps } from '.';
 
@@ -130,7 +131,7 @@ export const useMapperPage = (_props: MapperPageProps) => {
     const valueByKey: Record<string, string> = {};
     for (const remote of remotes) {
       for (const button of remote.buttons) {
-        valueByKey[button.id] = button.keyName;
+        valueByKey[button.id] = getButtonDisplayName(button);
       }
     }
     return valueByKey;

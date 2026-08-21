@@ -5,6 +5,7 @@ export interface TuyaKeyItem {
   key_name?: string;
   key_id?: number | string;
   code?: string;
+  standard_key?: boolean;
 }
 
 export interface TuyaKeysResult {
