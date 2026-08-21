@@ -20,6 +20,24 @@ const FAN_SPEED_NUMBER_BY_MODE: Record<AcFanMode, 1 | 2 | 3> = {
 const POWER_ON_KEYS = ['power_on', 'PowerOn'] as const;
 const POWER_OFF_KEYS = ['power_off', 'PowerOff'] as const;
 
+const LEARNED_MODE_LABELS: Record<AcHvacMode, readonly string[]> = {
+  cool: ['cold', 'cool'],
+  dry: ['dehumidify', 'dry'],
+  fan_only: ['fan only mode', 'fan only'],
+};
+
+const LEARNED_FAN_LABELS: Record<AcFanMode, readonly string[]> = {
+  low: ['fan 1', 'fan1'],
+  medium: ['fan 2', 'fan2'],
+  high: ['fan 3', 'fan3'],
+};
+
+const TEMPERATURE_UP_LABELS = ['t', 'temperature', 'temp up', 'temp+'] as const;
+
+const normalizeButtonLabel = (value: string): string => {
+  return value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+};
+
 export const clampAcTemperatureC = (temperatureC: number): number => {
   if (!Number.isFinite(temperatureC)) {
     return AC_DEFAULT_TEMPERATURE_C;
@@ -124,6 +142,130 @@ export const findAcLibraryButton = ({
     fanMode: mode === 'dry' ? AC_DEFAULT_FAN_MODE : normalizeAcFanMode(state.fanMode),
   });
   return findRemoteButtonByKeys({ catalog, remoteId, keys: [key] });
+};
+
+export const findCatalogButtonByLabels = ({
+  catalog,
+  remoteId,
+  labels,
+}: {
+  catalog: Catalog;
+  remoteId: string;
+  labels: readonly string[];
+}): CatalogButton | undefined => {
+  const wantedLabels = new Set(labels.map(normalizeButtonLabel));
+  const preferredRemote = catalog.remotes.find((item) => item.remoteId === remoteId);
+  const remotesToSearch = preferredRemote
+    ? [preferredRemote, ...catalog.remotes.filter((item) => item.remoteId !== remoteId)]
+    : catalog.remotes;
+
+  const pickFromRemote = (remote: Catalog['remotes'][number]): CatalogButton | undefined => {
+    const matches = remote.buttons.filter((button) => {
+      return (
+        wantedLabels.has(normalizeButtonLabel(button.key)) ||
+        wantedLabels.has(normalizeButtonLabel(button.keyName))
+      );
+    });
+    return matches.find((button) => button.source === 'learned') ?? matches[0];
+  };
+
+  for (const remote of remotesToSearch) {
+    const button = pickFromRemote(remote);
+    if (button) {
+      return button;
+    }
+  }
+  return undefined;
+};
+
+export const countAcTemperatureUpSteps = ({
+  fromC,
+  toC,
+}: {
+  fromC: number;
+  toC: number;
+}): number => {
+  const fromTemperatureC = clampAcTemperatureC(fromC);
+  const toTemperatureC = clampAcTemperatureC(toC);
+  if (fromTemperatureC === toTemperatureC) {
+    return 0;
+  }
+  if (toTemperatureC > fromTemperatureC) {
+    return toTemperatureC - fromTemperatureC;
+  }
+  return AC_MAX_TEMPERATURE_C - fromTemperatureC + (toTemperatureC - AC_MIN_TEMPERATURE_C) + 1;
+};
+
+export const listAcClimateButtonsToSend = ({
+  catalog,
+  remoteId,
+  previousState,
+  nextState,
+}: {
+  catalog: Catalog;
+  remoteId: string;
+  previousState: ClimateAssumedState;
+  nextState: ClimateAssumedState;
+}): CatalogButton[] => {
+  if (!nextState.isOn) {
+    return [findAcPowerButton({ catalog, remoteId, isOn: false })];
+  }
+
+  const buttons: CatalogButton[] = [];
+  if (!previousState.isOn) {
+    buttons.push(findAcPowerButton({ catalog, remoteId, isOn: true }));
+  }
+
+  const nextMode = normalizeAcHvacMode(nextState.mode);
+  const previousMode = normalizeAcHvacMode(previousState.mode);
+  const nextFanMode = normalizeAcFanMode(nextState.fanMode);
+  const previousFanMode = normalizeAcFanMode(previousState.fanMode);
+  const nextTemperatureC = clampAcTemperatureC(nextState.temperatureC ?? AC_DEFAULT_TEMPERATURE_C);
+  const previousTemperatureC = clampAcTemperatureC(
+    previousState.temperatureC ?? AC_DEFAULT_TEMPERATURE_C,
+  );
+  const learnedMode = findCatalogButtonByLabels({
+    catalog,
+    remoteId,
+    labels: LEARNED_MODE_LABELS[nextMode],
+  });
+  const learnedFan =
+    nextMode === 'dry'
+      ? undefined
+      : findCatalogButtonByLabels({
+          catalog,
+          remoteId,
+          labels: LEARNED_FAN_LABELS[nextFanMode],
+        });
+  const temperatureUp = findCatalogButtonByLabels({
+    catalog,
+    remoteId,
+    labels: TEMPERATURE_UP_LABELS,
+  });
+
+  if (!learnedMode && !learnedFan) {
+    buttons.push(findAcLibraryButton({ catalog, remoteId, state: nextState }));
+    return buttons;
+  }
+
+  const isTurningOn = !previousState.isOn;
+  if ((isTurningOn || previousMode !== nextMode) && learnedMode) {
+    buttons.push(learnedMode);
+  }
+  if ((isTurningOn || previousFanMode !== nextFanMode) && learnedFan) {
+    buttons.push(learnedFan);
+  }
+  if (nextMode === 'cool' && temperatureUp) {
+    const stepCount = countAcTemperatureUpSteps({
+      fromC: previousTemperatureC,
+      toC: nextTemperatureC,
+    });
+    for (let stepIndex = 0; stepIndex < stepCount; stepIndex += 1) {
+      buttons.push(temperatureUp);
+    }
+  }
+
+  return buttons;
 };
 
 export const applyAcPowerCommand = ({

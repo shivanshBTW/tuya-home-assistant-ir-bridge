@@ -11,10 +11,10 @@ import {
   listSoundbarButtonSlots,
   listTvButtonSlots,
 } from '../templates/deviceTemplates.js';
+import { RATE_LIMIT_DELAY_MS } from '../constants.js';
 import {
-  findAcLibraryButton,
-  findAcPowerButton,
   isAcHvacMode,
+  listAcClimateButtonsToSend,
   publishedAcFanMode,
 } from '../templates/acCommand.js';
 import {
@@ -538,30 +538,21 @@ export class MqttPublisher {
     };
 
     try {
-      if (!nextState.isOn) {
-        const powerOff = findAcPowerButton({
-          catalog,
-          remoteId: device.tuyaRemoteId,
-          isOn: false,
-        });
-        await sendAcButton(powerOff.id);
-        return;
-      }
-      if (!previousClimateState.isOn) {
-        const powerOn = findAcPowerButton({
-          catalog,
-          remoteId: device.tuyaRemoteId,
-          isOn: true,
-        });
-        await sendAcButton(powerOn.id);
-      }
-      const climateButton = findAcLibraryButton({
+      const climateButtons = listAcClimateButtonsToSend({
         catalog,
         remoteId: device.tuyaRemoteId,
-        state: nextState,
+        previousState: previousClimateState,
+        nextState,
       });
-      console.log(`MQTT climate key ${deviceId} ${climateButton.key}`);
-      await sendAcButton(climateButton.id);
+      for (const [buttonIndex, climateButton] of climateButtons.entries()) {
+        if (buttonIndex > 0) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, RATE_LIMIT_DELAY_MS);
+          });
+        }
+        console.log(`MQTT climate key ${deviceId} ${climateButton.keyName} (${climateButton.key})`);
+        await sendAcButton(climateButton.id);
+      }
     } catch (error) {
       console.error(
         `MQTT climate command failed for ${deviceId}: ${

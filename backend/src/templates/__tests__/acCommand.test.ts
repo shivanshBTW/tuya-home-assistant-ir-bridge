@@ -6,8 +6,10 @@ import {
   applyAcModeCommand,
   applyAcPowerCommand,
   applyAcTemperatureCommand,
+  countAcTemperatureUpSteps,
   findAcLibraryButton,
   findAcPowerButton,
+  listAcClimateButtonsToSend,
   publishedAcFanMode,
   resolveAcLibraryKey,
 } from '../acCommand.js';
@@ -208,5 +210,97 @@ describe('findAc library buttons', () => {
       findAcPowerButton({ catalog: catalogWithCustom, remoteId: 'lg-custom', isOn: true }).key,
       'PowerOn',
     );
+  });
+});
+
+describe('listAcClimateButtonsToSend', () => {
+  const learnedButton = ({
+    id,
+    key,
+    keyName,
+  }: {
+    id: string;
+    key: string;
+    keyName: string;
+  }): Catalog['remotes'][number]['buttons'][number] => ({
+    id,
+    remoteId: 'lg-custom',
+    key,
+    keyName,
+    source: 'learned',
+    code: 'learned-code',
+    raw: {},
+  });
+
+  const catalogWithLearned: Catalog = {
+    ...catalog,
+    remotes: [
+      {
+        remoteId: 'lg-custom',
+        remote: {},
+        keys: {},
+        learningCodes: [],
+        buttons: [
+          {
+            id: 'custom-on',
+            remoteId: 'lg-custom',
+            key: 'PowerOn',
+            keyName: 'power on',
+            source: 'key',
+            raw: {},
+          },
+          {
+            id: 'custom-temp',
+            remoteId: 'lg-custom',
+            key: 'T',
+            keyName: 'temperature',
+            source: 'key',
+            raw: {},
+          },
+          learnedButton({ id: 'custom-cold', key: '1787cold', keyName: 'Cold' }),
+          learnedButton({ id: 'custom-dry', key: '1787dry', keyName: 'Dehumidify' }),
+          learnedButton({ id: 'custom-fan-only', key: '1787fo', keyName: 'Fan Only Mode' }),
+          learnedButton({ id: 'custom-fan-1', key: '1787f1', keyName: 'Fan 1' }),
+          learnedButton({ id: 'custom-fan-2', key: '1787f2', keyName: 'Fan 2' }),
+          learnedButton({ id: 'custom-fan-3', key: '1787f3', keyName: 'Fan 3' }),
+        ],
+      },
+      ...catalog.remotes,
+    ],
+  };
+
+  it('sends learned Fan 3 instead of a Bedroom library frame', () => {
+    const buttons = listAcClimateButtonsToSend({
+      catalog: catalogWithLearned,
+      remoteId: 'lg-custom',
+      previousState: coolState({ fanMode: 'medium' }),
+      nextState: coolState({ fanMode: 'high' }),
+    });
+    assert.deepEqual(
+      buttons.map((button) => button.keyName),
+      ['Fan 3'],
+    );
+  });
+
+  it('steps temperature up with wrap using the Custom T key', () => {
+    assert.equal(countAcTemperatureUpSteps({ fromC: 24, toC: 23 }), 14);
+    const buttons = listAcClimateButtonsToSend({
+      catalog: catalogWithLearned,
+      remoteId: 'lg-custom',
+      previousState: coolState({ temperatureC: 24 }),
+      nextState: coolState({ temperatureC: 23 }),
+    });
+    assert.equal(buttons.length, 14);
+    assert.equal(buttons[0]?.key, 'T');
+  });
+
+  it('falls back to the library key when no learned climate buttons exist', () => {
+    const buttons = listAcClimateButtonsToSend({
+      catalog,
+      remoteId: 'bedroom-ac',
+      previousState: coolState(),
+      nextState: coolState(),
+    });
+    assert.equal(buttons[0]?.key, 'M0_T24_S2');
   });
 });

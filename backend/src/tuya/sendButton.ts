@@ -15,6 +15,10 @@ const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
   throw new Error(`Unknown button ${buttonId}`);
 };
 
+export const shouldSendCatalogButtonLocally = (button: CatalogButton): boolean => {
+  return Boolean(button.code) && !button.id.includes(':library:');
+};
+
 export const sendCatalogButton = async ({
   catalog,
   buttonId,
@@ -34,7 +38,7 @@ export const sendCatalogButton = async ({
     throw new Error(`Unknown remote ${button.remoteId}`);
   }
 
-  if (button.code && catalog.local.key) {
+  if (shouldSendCatalogButtonLocally(button) && catalog.local.key) {
     const resolved = await resolveTuyaLocalHost({
       configuredIp,
       configuredMac: configuredMac ?? catalog.local.mac,
