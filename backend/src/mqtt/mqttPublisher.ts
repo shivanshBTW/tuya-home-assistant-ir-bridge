@@ -15,6 +15,7 @@ import { RATE_LIMIT_DELAY_MS } from '../constants.js';
 import {
   isAcHvacMode,
   listAcClimateButtonsToSend,
+  normalizeAcHvacMode,
   publishedAcFanMode,
 } from '../templates/acCommand.js';
 import {
@@ -554,8 +555,16 @@ export class MqttPublisher {
         await sendAcButton(climateButton.id);
       }
       if (climateButtons.length === 0) {
+        const hasFanCommand = commands.some((command) => command.kind === 'fan_mode');
+        const hasTemperatureCommand = commands.some((command) => command.kind === 'temperature');
+        const skipReason =
+          hasFanCommand && normalizeAcHvacMode(nextState.mode) === 'dry'
+            ? 'dry locks fan at low; Fan 2/3 IR not sent'
+            : hasTemperatureCommand
+              ? 'Custom has no absolute temp IR; card memory updated only'
+              : 'no IR for this snapshot';
         console.log(
-          `MQTT climate ${deviceId} updated memory only (mode ${nextState.mode ?? 'cool'} ${rememberedAcTemperatureC(nextState)}C ${publishedAcFanMode(nextState)}); Custom has no absolute temp IR`,
+          `MQTT climate ${deviceId} ${skipReason} (mode ${nextState.mode ?? 'cool'} ${rememberedAcTemperatureC(nextState)}C ${publishedAcFanMode(nextState)})`,
         );
       }
     } catch (error) {
