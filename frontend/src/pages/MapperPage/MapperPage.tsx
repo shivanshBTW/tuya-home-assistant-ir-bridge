@@ -211,21 +211,21 @@ export const MapperPage: FC<Props> = ({
           </Typography>
           {!selectedDevice && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
-              Create or select a mapping.
+              Create or select a mapping to assign the extras below.
             </Alert>
           )}
-          {selectedDevice?.template === 'tv' && (
+          {(selectedDevice?.template === 'tv' || selectedTemplate?.id === 'tv') && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               Power, volume, mute, play/pause, and last HDMI go to Google as a TV. Home, d-pad,
               Netflix, settings, HDMI cycle, and the rest become Home Assistant buttons on the
               same device.
             </Alert>
           )}
-          {selectedDevice?.template === 'ac' && (
+          {(selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
-              Cool, dry, and fan-only plus temperature and fan come from the Bedroom library
-              keys automatically. Assign Custom remote buttons to power saving, sleep, and timer;
-              those stay Home Assistant extras on the same device.
+              Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
+              speed are sent from the Bedroom Air Conditioner library automatically. These six
+              slots are optional Home Assistant extras from the Custom remote.
             </Alert>
           )}
           <Stack spacing={1} sx={paneScrollSx}>
