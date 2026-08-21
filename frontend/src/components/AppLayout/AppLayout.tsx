@@ -13,7 +13,14 @@ type Props = ReturnType<typeof useAppLayout>;
 
 export const AppLayout: FC<Props> = ({ children }) => {
   return (
-    <Box sx={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      sx={{
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
       <AppBar position="static">
         <Toolbar sx={{ gap: 2 }}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
@@ -39,7 +46,7 @@ export const AppLayout: FC<Props> = ({ children }) => {
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'auto',
+          overflow: 'hidden',
         }}
       >
         {children}

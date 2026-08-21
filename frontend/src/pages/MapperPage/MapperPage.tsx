@@ -22,6 +22,7 @@ const panePaperSx = {
   flexDirection: 'column',
   gap: 2,
   minHeight: 0,
+  height: '100%',
   overflow: 'hidden',
 } as const;
 
@@ -29,6 +30,7 @@ const paneScrollSx = {
   overflow: 'auto',
   minHeight: 0,
   flex: 1,
+  overscrollBehavior: 'contain',
 } as const;
 
 export const MapperPage: FC<Props> = ({
@@ -71,7 +73,14 @@ export const MapperPage: FC<Props> = ({
   }
 
   return (
-    <Stack spacing={3} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+    <Stack
+      spacing={3}
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+      }}
+    >
       <Box sx={{ flexShrink: 0 }}>
         <Typography variant="h4">Build HA remotes</Typography>
         <Typography color="text.secondary">
@@ -158,7 +167,9 @@ export const MapperPage: FC<Props> = ({
         }}
       >
         <Paper sx={panePaperSx}>
-          <Typography variant="h6">Tuya buttons</Typography>
+          <Typography variant="h6" sx={{ flexShrink: 0 }}>
+            Tuya buttons
+          </Typography>
           <Stack spacing={1} sx={paneScrollSx}>
             {(selectedRemote?.buttons ?? []).map((button) => (
               <Box
@@ -194,18 +205,22 @@ export const MapperPage: FC<Props> = ({
         </Paper>
 
         <Paper sx={panePaperSx}>
-          <Typography variant="h6">
+          <Typography variant="h6" sx={{ flexShrink: 0 }}>
             HA slots {selectedDevice ? `— ${selectedDevice.name}` : ''}
           </Typography>
+          {!selectedDevice && (
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+              Create or select a mapping.
+            </Alert>
+          )}
+          {selectedDevice?.template === 'tv' && (
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+              Power, volume, mute, play/pause, and last HDMI go to Google as a TV. Home, d-pad,
+              Netflix, settings, HDMI cycle, and the rest become Home Assistant buttons on the
+              same device.
+            </Alert>
+          )}
           <Stack spacing={1} sx={paneScrollSx}>
-            {!selectedDevice && <Alert severity="info">Create or select a mapping.</Alert>}
-            {selectedDevice?.template === 'tv' && (
-              <Alert severity="info">
-                Power, volume, mute, play/pause, and last HDMI go to Google as a TV. Home, d-pad,
-                Netflix, settings, HDMI cycle, and the rest become Home Assistant buttons on the
-                same device.
-              </Alert>
-            )}
             {(selectedTemplate?.slots ?? []).map((slot) => {
               const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;
               return (

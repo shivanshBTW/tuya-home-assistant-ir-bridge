@@ -16,7 +16,14 @@ export const App = () => {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AppLayout>
-            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                position: 'relative',
+                overflow: 'auto',
+              }}
+            >
               <Routes>
                 <Route path="/" element={<MapperPage />} />
                 <Route path="/keypad" element={<KeypadPage />} />
