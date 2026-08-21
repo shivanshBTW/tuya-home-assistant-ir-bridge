@@ -1,0 +1,19 @@
+{
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "devices": [
+    {
+      "id": "living_room_fan",
+      "name": "Living Room Fan",
+      "template": "fan",
+      "tuyaRemoteId": "example-fan-remote",
+      "slots": {
+        "power": { "buttonId": "example-fan-remote:learned:1" }
+      },
+      "assumedState": {
+        "isOn": false,
+        "speed": 1,
+        "isLedOn": false
+      }
+    }
+  ]
+}

@@ -16,8 +16,12 @@
 
 ## Workspace
 
-- **Stack:** React 19, MUI v9, React Hook Form, React Router v8, Tanstack query
+- **Repo:** `tuya-home-assistant-ir-bridge`
+- **Backend:** Fastify, TypeScript, Node 24 LTS (`.nvmrc`)
+- **Frontend:** Vite, React 19, MUI v9 (`colorSchemes` light/dark), React Hook Form,
+  React Router v8, TanStack Query, `material-react-toastify`
 - **Package manager:** pnpm workspaces. Never run `npm install` or `yarn` — pnpm only.
+- **License:** GNU GPL v3 (`LICENSE`). Do not replace with MIT.
 
 ## Validation
 
@@ -102,7 +106,7 @@ export const ComponentName: React.FC<Props> = (
 
 ## Data Transformation
 
-- API types and reusable API transformations live in `libs/services`; feature-specific UI-state to API transformations live near the feature in `transformer.ts`.
+- API types and reusable API transformations live in `frontend/src/libs/services`; feature-specific UI-state to API transformations live near the feature in `transformer.ts`.
 - Use separate API and client types when field names, nullability, nesting, or semantics differ. Suffix API-response interfaces with `API` (e.g. `MediaImageAPI` → `MediaImage`).
 - Name transform functions `transform{Entity}From{Source}` / `transform{Entity}To{Target}`. Compose small transformers for nested structures; handle collections with a collection transformer that maps over the entity transformer.
 - Handle nullable fields according to the API contract. Do not silently invent fallback values for required data.
@@ -110,17 +114,25 @@ export const ComponentName: React.FC<Props> = (
 ## Async & Data Fetching
 
 - Use `async/await` — no `.then()` chains.
-- GraphQL → Apollo; REST → TanStack Query. Handle failures through the respective error flow.
+- REST → TanStack Query. Handle failures through the query/mutation error flow.
 - Use `try/catch` for awaited operations only when the caller must recover or add context.
 - Use React error boundaries for unexpected rendering errors.
 
 ## Styling
 
-- Use MUI v9 for all UI work. Follow the existing theme — do not introduce new themes.
+- Use MUI v9 for all UI work. Use the existing theme with `colorSchemes` light/dark — do not add a second design system.
 - Prefer `sx` for MUI styling and state-driven styles; colocate styles with components.
 - Use CSS modules (`styles.module.scss`, next to the component) only for complex selectors, keyframes, pseudo-elements, and browser-specific rules awkward in `sx`. camelCase, purpose-descriptive class names.
 - Never use `!important`. Avoid z-index via layout positioning; if unavoidable, use theme z-index tokens, never arbitrary numbers.
 
+## Secrets
+
+- Never commit `.env`, `data/catalog.json`, or `data/mapping.json`.
+- Frontend must not receive Tuya secrets or raw IR codes.
+
 ## Config Files
 
-- Nx: `nx.json` · TS: `tsconfig.base.json` + per-project · ESLint: `eslint.config.cjs` (flat) · Prettier: `.prettierrc`
+- TS: `tsconfig.base.json` + per-project
+- ESLint: `backend/eslint.config.cjs`, `frontend/eslint.config.js`
+- Prettier: `.prettierrc`
+- Node: `.nvmrc` (`24`)

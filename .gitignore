@@ -1,0 +1,31 @@
+# Secrets and local env
+.env
+.env.local
+.env.*.local
+!.env.example
+!**/.env.example
+
+# Runtime dumps (localKey, IR payloads)
+/data/*
+!/data/.gitkeep
+
+# Dependencies and builds
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Frontend
+frontend/dist/

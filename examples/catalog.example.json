@@ -1,0 +1,27 @@
+{
+  "infraredId": "example-ir-hub-id",
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "local": {
+    "id": "example-ir-hub-id",
+    "host": "192.0.2.10",
+    "version": "3.3",
+    "irSendDp": "201",
+    "key": "<redacted>"
+  },
+  "remotes": [
+    {
+      "remoteId": "example-fan-remote",
+      "remoteName": "Example Fan",
+      "buttons": [
+        {
+          "id": "example-fan-remote:learned:1",
+          "remoteId": "example-fan-remote",
+          "key": "power",
+          "keyName": "Power",
+          "source": "learned",
+          "code": "<redacted>"
+        }
+      ]
+    }
+  ]
+}

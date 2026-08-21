@@ -1,0 +1,10 @@
+services:
+  tuya-home-assistant-ir-bridge:
+    build: .
+    container_name: tuya-home-assistant-ir-bridge
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - backend/.env
+    volumes:
+      - ./data:/app/data
