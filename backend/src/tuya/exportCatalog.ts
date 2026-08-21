@@ -1,77 +1,12 @@
-import type { Catalog, CatalogButton, CatalogRemote, LocalDevice } from '../types.js';
+import type { Catalog, CatalogRemote, LocalDevice } from '../types.js';
 import type { TuyaCloudClient } from './cloudClient.js';
+import { flattenButtonsFromIrPayloads, parseKeysResult } from './irPayload.js';
 import {
   fetchDeviceDetail,
   fetchInfraredRemotes,
   lookupGatewayId,
   resolveInfraredHubId,
 } from './remoteList.js';
-
-interface TuyaKeyItem {
-  key?: string;
-  key_name?: string;
-  key_id?: number | string;
-  code?: string;
-}
-
-interface TuyaKeysResult {
-  key_list?: TuyaKeyItem[];
-  category_id?: number;
-  brand_id?: number;
-  remote_index?: number;
-}
-
-interface TuyaLearnedCode {
-  id?: string | number;
-  learn_id?: string | number;
-  key?: string;
-  key_name?: string;
-  code?: string;
-  remote_id?: string;
-}
-
-const flattenButtons = ({
-  remoteId,
-  keys,
-  learningCodes,
-}: {
-  remoteId: string;
-  keys: unknown;
-  learningCodes: unknown;
-}): CatalogButton[] => {
-  const buttons: CatalogButton[] = [];
-  const keysResult = (keys ?? {}) as TuyaKeysResult;
-  const keyList = Array.isArray(keysResult.key_list) ? keysResult.key_list : [];
-
-  for (const [keyIndex, keyItem] of keyList.entries()) {
-    const key = String(keyItem.key ?? `key_${keyIndex}`);
-    buttons.push({
-      id: `${remoteId}:key:${key}:${keyItem.key_id ?? keyIndex}`,
-      remoteId,
-      key,
-      keyName: String(keyItem.key_name ?? key),
-      code: typeof keyItem.code === 'string' ? keyItem.code : undefined,
-      source: 'key',
-      raw: keyItem,
-    });
-  }
-
-  const learnedList = Array.isArray(learningCodes) ? (learningCodes as TuyaLearnedCode[]) : [];
-  for (const [learnedIndex, learned] of learnedList.entries()) {
-    const key = String(learned.key ?? `learned_${learnedIndex}`);
-    buttons.push({
-      id: `${remoteId}:learned:${learned.learn_id ?? learned.id ?? learnedIndex}`,
-      remoteId,
-      key,
-      keyName: String(learned.key_name ?? key),
-      code: typeof learned.code === 'string' ? learned.code : undefined,
-      source: 'learned',
-      raw: learned,
-    });
-  }
-
-  return buttons;
-};
 
 export const exportCatalog = async ({
   cloudClient,
@@ -120,14 +55,14 @@ export const exportCatalog = async ({
 
   const remotes: CatalogRemote[] = [];
 
-  for (const [remoteIndex, remoteItem] of remoteList.entries()) {
+  for (const [remoteListIndex, remoteItem] of remoteList.entries()) {
     const remoteId = String(remoteItem.remote_id ?? '');
     if (!remoteId) {
       continue;
     }
 
     const remoteName = remoteItem.remote_name ?? remoteId;
-    console.log(`[${remoteIndex + 1}/${remoteList.length}] ${remoteName}`);
+    console.log(`[${remoteListIndex + 1}/${remoteList.length}] ${remoteName}`);
 
     let keys: unknown = { key_list: [] };
     try {
@@ -151,34 +86,45 @@ export const exportCatalog = async ({
       );
     }
 
+    const keysResult = parseKeysResult(keys);
+    const categoryId = remoteItem.category_id ?? keysResult.category_id;
+    const brandId = remoteItem.brand_id ?? keysResult.brand_id;
+    const remoteIndex = remoteItem.remote_index ?? keysResult.remote_index;
+
     let codeLibrary: unknown;
-    if (
-      remoteItem.category_id !== undefined &&
-      remoteItem.brand_id !== undefined &&
-      remoteItem.remote_index !== undefined
-    ) {
+    if (categoryId !== undefined && brandId !== undefined && remoteIndex !== undefined) {
       try {
         codeLibrary = await cloudClient.request<unknown>({
           method: 'GET',
-          path: `/v2.0/infrareds/${infraredId}/categories/${remoteItem.category_id}/brands/${remoteItem.brand_id}/remotes/${remoteItem.remote_index}/rules`,
+          path: `/v2.0/infrareds/${infraredId}/categories/${categoryId}/brands/${brandId}/remotes/${remoteIndex}/rules`,
         });
-      } catch {
+      } catch (error) {
+        console.warn(
+          `  code library unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        );
         codeLibrary = undefined;
       }
     }
 
-    const buttons = flattenButtons({ remoteId, keys, learningCodes });
+    const buttons = flattenButtonsFromIrPayloads({
+      remoteId,
+      keys,
+      learningCodes,
+      codeLibrary,
+    });
     const learnedCount = buttons.filter((button) => button.source === 'learned').length;
+    const payloadCount = buttons.filter((button) => Boolean(button.code)).length;
     console.log(`  ${buttons.length} buttons`);
     console.log(`  ${learnedCount} learned codes`);
+    console.log(`  ${payloadCount} raw IR payloads`);
 
     remotes.push({
       remoteId,
       remoteName: remoteItem.remote_name,
-      categoryId: remoteItem.category_id,
-      brandId: remoteItem.brand_id,
+      categoryId,
+      brandId,
       brandName: remoteItem.brand_name,
-      remoteIndex: remoteItem.remote_index,
+      remoteIndex,
       remote: remoteItem,
       keys,
       learningCodes,
