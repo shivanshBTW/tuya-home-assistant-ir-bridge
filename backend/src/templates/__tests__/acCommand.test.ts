@@ -9,6 +9,8 @@ import {
   findAcLibraryButton,
   findAcPowerButton,
   listAcClimateButtonsToSend,
+  parseTuyaAcLibraryKey,
+  tuyaAcSceneFromClimateState,
   publishedAcFanMode,
   resolveAcLibraryKey,
 } from '../acCommand.js';
@@ -76,6 +78,23 @@ const catalog: Catalog = {
     },
   ],
 };
+
+describe('parseTuyaAcLibraryKey', () => {
+  it('reads cool 28C low as Tuya scene fields', () => {
+    assert.deepEqual(parseTuyaAcLibraryKey('M0_T28_S1'), { mode: 0, temp: 28, wind: 1 });
+    assert.deepEqual(parseTuyaAcLibraryKey('M0_T28_S3'), { mode: 0, temp: 28, wind: 3 });
+    assert.deepEqual(parseTuyaAcLibraryKey('M4_S1'), { mode: 4, temp: 24, wind: 1 });
+  });
+
+  it('maps assumed climate state to one Tuya AC scene', () => {
+    assert.deepEqual(
+      tuyaAcSceneFromClimateState({
+        state: { isOn: true, mode: 'cool', temperatureC: 28, fanMode: 'low' },
+      }),
+      { power: 1, mode: 0, temp: 28, wind: 1 },
+    );
+  });
+});
 
 describe('resolveAcLibraryKey', () => {
   it('sends cool as M0 with temp and S2 as medium', () => {

@@ -1,3 +1,5 @@
+import type { TuyaAcSceneCommand } from '../templates/acCommand.js';
+import { parseTuyaAcLibraryKey } from '../templates/acCommand.js';
 import type { CatalogButton, CatalogRemote } from '../types.js';
 import type { TuyaCloudClient } from './cloudClient.js';
 
@@ -49,6 +51,21 @@ export const listCloudSendAttempts = ({
   const isStandardKey = typeof raw.standard_key === 'boolean' ? raw.standard_key : undefined;
 
   const remotePath = `/v2.0/infrareds/${infraredId}/remotes/${remote.remoteId}`;
+  const acScene = parseTuyaAcLibraryKey(button.key);
+  const acSceneAttempt: CloudSendAttempt | undefined = acScene
+    ? {
+        label: 'ac-scene-command',
+        path: `/v2.0/infrareds/${infraredId}/air-conditioners/${remote.remoteId}/scenes/command`,
+        body: {
+          ...(categoryId === undefined ? {} : { category_id: categoryId }),
+          ...(remoteIndex === undefined ? {} : { remote_index: remoteIndex }),
+          power: 1,
+          mode: acScene.mode,
+          temp: acScene.temp,
+          wind: acScene.wind,
+        },
+      }
+    : undefined;
   const learningAttempt: CloudSendAttempt | undefined = button.code
     ? {
         label: 'learning-codes',
@@ -83,6 +100,11 @@ export const listCloudSendAttempts = ({
     attempts.push(attempt);
   };
 
+  pushUnique(acSceneAttempt);
+  if (acSceneAttempt) {
+    pushUnique(learningAttempt);
+    return attempts;
+  }
   if (button.source === 'learned' && learningAttempt) {
     pushUnique(learningAttempt);
   }
@@ -138,4 +160,29 @@ export const sendCloudButton = async ({
   }
 
   throw lastError instanceof Error ? lastError : new Error('Cloud send failed');
+};
+
+export const sendAcSceneCommand = async ({
+  cloudClient,
+  infraredId,
+  remote,
+  scene,
+}: {
+  cloudClient: TuyaCloudClient;
+  infraredId: string;
+  remote: CatalogRemote;
+  scene: TuyaAcSceneCommand;
+}): Promise<void> => {
+  const keysRecord = asRecord(remote.keys);
+  const categoryId = remote.categoryId ?? keysRecord.category_id;
+  const remoteIndex = remote.remoteIndex ?? keysRecord.remote_index;
+  await cloudClient.request({
+    method: 'POST',
+    path: `/v2.0/infrareds/${infraredId}/air-conditioners/${remote.remoteId}/scenes/command`,
+    body: {
+      ...(typeof categoryId === 'number' ? { category_id: categoryId } : {}),
+      ...(typeof remoteIndex === 'number' ? { remote_index: remoteIndex } : {}),
+      ...scene,
+    },
+  });
 };

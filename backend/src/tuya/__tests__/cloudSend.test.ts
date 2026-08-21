@@ -71,6 +71,37 @@ describe('listCloudSendAttempts', () => {
     );
   });
 
+  it('sends AC library keys through scenes/command, not remotes/command', () => {
+    const attempts = listCloudSendAttempts({
+      infraredId: 'hub',
+      remote: { ...remote, categoryId: 5, remoteIndex: 3482, remoteId: 'bedroom-ac' },
+      button: button({
+        id: 'bedroom-ac:library:M0_T28_S1:0',
+        remoteId: 'bedroom-ac',
+        key: 'M0_T28_S1',
+        keyName: 'M0_T28_S1',
+        code: 'aabb',
+        raw: { key: 'M0_T28_S1', key_id: 0 },
+      }),
+    });
+    assert.deepEqual(
+      attempts.map((attempt) => attempt.label),
+      ['ac-scene-command', 'learning-codes'],
+    );
+    assert.equal(
+      attempts[0]?.path,
+      '/v2.0/infrareds/hub/air-conditioners/bedroom-ac/scenes/command',
+    );
+    assert.deepEqual(attempts[0]?.body, {
+      category_id: 5,
+      remote_index: 3482,
+      power: 1,
+      mode: 0,
+      temp: 28,
+      wind: 1,
+    });
+  });
+
   it('sends learned codes first, then falls back to key APIs', () => {
     const attempts = listCloudSendAttempts({
       infraredId: 'hub',

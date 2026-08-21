@@ -13,11 +13,14 @@ import {
 } from '../templates/deviceTemplates.js';
 import { RATE_LIMIT_DELAY_MS } from '../constants.js';
 import {
+  findAcLibraryRemote,
   isAcHvacMode,
   listAcClimateButtonsToSend,
   normalizeAcHvacMode,
   publishedAcFanMode,
+  tuyaAcSceneFromClimateState,
 } from '../templates/acCommand.js';
+import { sendAcSceneCommand } from '../tuya/cloudSend.js';
 import {
   acClimateDiscoveryPayload,
   applyClimateMqttBurst,
@@ -539,6 +542,36 @@ export class MqttPublisher {
     };
 
     try {
+      const cloudClient = this.getCloudClient();
+      const libraryRemote = findAcLibraryRemote({
+        catalog,
+        remoteId: device.tuyaRemoteId,
+      });
+      if (cloudClient && libraryRemote) {
+        const scene = tuyaAcSceneFromClimateState({ state: nextState });
+        console.log(
+          `MQTT climate scene ${deviceId} power=${scene.power} mode=${scene.mode} temp=${scene.temp} wind=${scene.wind}`,
+        );
+        try {
+          await sendAcSceneCommand({
+            cloudClient,
+            infraredId: catalog.infraredId,
+            remote: libraryRemote,
+            scene,
+          });
+          console.log(
+            `MQTT climate sent ${deviceId} ac-scene via cloud remote ${libraryRemote.remoteId}`,
+          );
+          return;
+        } catch (error) {
+          console.warn(
+            `MQTT climate ac-scene failed, falling back: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
+
       const climateButtons = listAcClimateButtonsToSend({
         catalog,
         remoteId: device.tuyaRemoteId,

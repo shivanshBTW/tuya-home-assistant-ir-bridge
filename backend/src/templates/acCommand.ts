@@ -81,6 +81,76 @@ export const resolveAcLibraryKey = ({
   return `M0_T${resolvedTemperatureC}_S${speedNumber}`;
 };
 
+export interface TuyaAcSceneCommand {
+  power: 0 | 1;
+  mode: 0 | 1 | 2 | 3 | 4;
+  temp: number;
+  wind: 0 | 1 | 2 | 3;
+}
+
+const TUYA_AC_MODE_NUMBER: Record<AcHvacMode, 0 | 3 | 4> = {
+  cool: 0,
+  fan_only: 3,
+  dry: 4,
+};
+
+const AC_LIBRARY_KEY_PATTERN = /^M(\d+)(?:_T(\d+))?(?:_S(\d+))?$/;
+
+export const parseTuyaAcLibraryKey = (
+  key: string,
+): Omit<TuyaAcSceneCommand, 'power'> | undefined => {
+  const match = AC_LIBRARY_KEY_PATTERN.exec(key);
+  if (!match) {
+    return undefined;
+  }
+  const modeNumber = Number(match[1]);
+  if (modeNumber < 0 || modeNumber > 4) {
+    return undefined;
+  }
+  const temperatureC = match[2] ? clampAcTemperatureC(Number(match[2])) : AC_DEFAULT_TEMPERATURE_C;
+  const windNumber = match[3] === undefined ? 1 : Number(match[3]);
+  if (windNumber < 0 || windNumber > 3) {
+    return undefined;
+  }
+  return {
+    mode: modeNumber as TuyaAcSceneCommand['mode'],
+    temp: temperatureC,
+    wind: windNumber as TuyaAcSceneCommand['wind'],
+  };
+};
+
+export const tuyaAcSceneFromClimateState = ({
+  state,
+}: {
+  state: ClimateAssumedState;
+}): TuyaAcSceneCommand => {
+  const mode = normalizeAcHvacMode(state.mode);
+  const fanMode = mode === 'dry' ? AC_DEFAULT_FAN_MODE : normalizeAcFanMode(state.fanMode);
+  return {
+    power: state.isOn ? 1 : 0,
+    mode: TUYA_AC_MODE_NUMBER[mode],
+    temp: clampAcTemperatureC(state.temperatureC ?? AC_DEFAULT_TEMPERATURE_C),
+    wind: FAN_SPEED_NUMBER_BY_MODE[fanMode],
+  };
+};
+
+export const findAcLibraryRemote = ({
+  catalog,
+  remoteId,
+}: {
+  catalog: Catalog;
+  remoteId: string;
+}): Catalog['remotes'][number] | undefined => {
+  const hasLibraryKeys = (remote: Catalog['remotes'][number]): boolean => {
+    return remote.buttons.some((button) => Boolean(parseTuyaAcLibraryKey(button.key)));
+  };
+  const preferredRemote = catalog.remotes.find((item) => item.remoteId === remoteId);
+  if (preferredRemote && hasLibraryKeys(preferredRemote)) {
+    return preferredRemote;
+  }
+  return catalog.remotes.find(hasLibraryKeys);
+};
+
 export const findRemoteButtonByKeys = ({
   catalog,
   remoteId,

@@ -68,17 +68,24 @@ export const registerRoutes = ({
   jsonStore: JsonStore;
   mqttPublisher: MqttPublisher;
 }): void => {
+  let cloudClient: TuyaCloudClient | undefined;
+  let hasResolvedCloudClient = false;
   const optionalCloudClient = (): TuyaCloudClient | undefined => {
+    if (hasResolvedCloudClient) {
+      return cloudClient;
+    }
+    hasResolvedCloudClient = true;
     try {
       const tuyaConfig = requireTuyaCloudConfig(appConfig);
-      return new TuyaCloudClient({
+      cloudClient = new TuyaCloudClient({
         apiEndpoint: tuyaConfig.apiEndpoint,
         accessId: tuyaConfig.accessId,
         accessSecret: tuyaConfig.accessSecret,
       });
     } catch {
-      return undefined;
+      cloudClient = undefined;
     }
+    return cloudClient;
   };
 
   app.get('/api/health', async () => ({ ok: true }));
