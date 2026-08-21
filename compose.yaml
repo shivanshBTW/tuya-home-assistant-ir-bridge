@@ -6,5 +6,7 @@ services:
     network_mode: host
     env_file:
       - backend/.env
+    environment:
+      DATA_DIR: /app/data
     volumes:
       - ./data:/app/data
