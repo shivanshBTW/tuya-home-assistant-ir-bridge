@@ -13,6 +13,10 @@ export const SettingsPage: FC<Props> = ({
   onSaveToken,
   onExport,
   isExportPending,
+  localHost,
+  hasLocalKey,
+  onFindLocalHost,
+  isFindLocalHostPending,
 }) => {
   return (
     <Stack spacing={3}>
@@ -31,6 +35,20 @@ export const SettingsPage: FC<Props> = ({
           />
           <Button type="submit" variant="contained">
             Save token
+          </Button>
+        </Stack>
+      </Paper>
+      <Paper sx={{ p: 2 }}>
+        <Stack spacing={2}>
+          <Typography variant="h6">IR blaster on LAN</Typography>
+          <Typography>
+            LAN IP: <code>{localHost ?? 'not found'}</code>
+          </Typography>
+          <Typography>
+            Local key: {hasLocalKey ? 'present (offline send can work)' : 'missing'}
+          </Typography>
+          <Button variant="outlined" onClick={onFindLocalHost} disabled={isFindLocalHostPending}>
+            {isFindLocalHostPending ? 'Searching LAN…' : 'Find on LAN'}
           </Button>
         </Stack>
       </Paper>

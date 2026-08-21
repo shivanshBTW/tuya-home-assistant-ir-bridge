@@ -10,11 +10,18 @@ import type {
   DeviceMapping,
   DeviceTemplate,
   DeviceTemplateAPI,
+  LocalHostStatus,
+  LocalHostStatusAPI,
   MappingFileAPI,
 } from './types';
 
-export const fetchHealth = async (): Promise<{ ok: boolean }> => {
-  return requestBridge<{ ok: boolean }>({ path: '/api/health' });
+export const fetchLocalHost = async ({
+  shouldScanSubnet = false,
+}: {
+  shouldScanSubnet?: boolean;
+} = {}): Promise<LocalHostStatus> => {
+  const query = shouldScanSubnet ? '?scan=1' : '';
+  return requestBridge<LocalHostStatusAPI>({ path: `/api/local-host${query}` });
 };
 
 export const fetchCatalog = async (): Promise<Catalog | null> => {

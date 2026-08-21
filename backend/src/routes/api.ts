@@ -6,6 +6,7 @@ import { DEVICE_TEMPLATES, getTemplateById } from '../templates/deviceTemplates.
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
 import { prepareLocalDevice } from '../tuya/localSend.js';
+import { resolveTuyaLocalHost } from '../tuya/resolveLocalHost.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
 import type {
   ClimateAssumedState,
@@ -81,6 +82,26 @@ export const registerRoutes = ({
   };
 
   app.get('/api/health', async () => ({ ok: true }));
+
+  app.get('/api/local-host', async (request) => {
+    const catalog = await jsonStore.readCatalog();
+    const deviceId = catalog?.local.id ?? appConfig.tuyaIrDeviceId;
+    if (!deviceId) {
+      return { host: undefined, hasLocalKey: false };
+    }
+    const query = request.query as { scan?: string };
+    const resolved = await resolveTuyaLocalHost({
+      configuredIp: appConfig.tuyaLocalIp,
+      configuredMac: appConfig.tuyaLocalMac,
+      fallbackHost: catalog?.local.host,
+      deviceId,
+      shouldScanSubnet: query.scan === '1',
+    });
+    return {
+      host: resolved.host,
+      hasLocalKey: Boolean(catalog?.local.key || appConfig.tuyaLocalKey),
+    };
+  });
 
   app.get('/api/templates', async () => ({ templates: DEVICE_TEMPLATES }));
 

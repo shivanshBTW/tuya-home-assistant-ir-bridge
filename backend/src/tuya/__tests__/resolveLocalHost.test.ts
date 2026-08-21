@@ -47,6 +47,37 @@ describe('resolveTuyaLocalHost', () => {
     assert.deepEqual(resolved, { host: '192.168.1.41' });
   });
 
+  it('can skip the subnet scan when looking up a MAC', async () => {
+    const resolved = await resolveTuyaLocalHost({
+      configuredMac: 'aa:bb:cc:dd:ee:ff',
+      deviceId: DEVICE_ID,
+      shouldScanSubnet: false,
+      lookupIp: async ({ shouldScanSubnet }) => {
+        assert.equal(shouldScanSubnet, false);
+        return '192.168.1.41';
+      },
+      discoverHost: async () => {
+        throw new Error('discovery should not run');
+      },
+    });
+
+    assert.deepEqual(resolved, { host: '192.168.1.41' });
+  });
+
+  it('skips LAN discovery when the subnet scan is off and no host is known yet', async () => {
+    const resolved = await resolveTuyaLocalHost({
+      configuredMac: 'aa:bb:cc:dd:ee:ff',
+      deviceId: DEVICE_ID,
+      shouldScanSubnet: false,
+      lookupIp: async () => undefined,
+      discoverHost: async () => {
+        throw new Error('discovery should not run');
+      },
+    });
+
+    assert.deepEqual(resolved, {});
+  });
+
   it('discovers by device id when MAC lookup misses and there is no fallback host', async () => {
     const resolved = await resolveTuyaLocalHost({
       configuredMac: 'aa:bb:cc:dd:ee:ff',

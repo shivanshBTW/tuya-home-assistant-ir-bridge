@@ -81,7 +81,18 @@ export interface CatalogRemote {
 export interface Catalog {
   infraredId: string;
   exportedAt: string;
+  localHost?: string;
   remotes: CatalogRemote[];
+}
+
+export interface LocalHostStatusAPI {
+  host?: string;
+  hasLocalKey: boolean;
+}
+
+export interface LocalHostStatus {
+  host?: string;
+  hasLocalKey: boolean;
 }
 
 export interface SlotDefinition {

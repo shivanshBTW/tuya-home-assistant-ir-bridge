@@ -28,6 +28,7 @@ export const resolveTuyaLocalHost = async ({
   deviceId,
   lookupIp = lookupIpByMac,
   discoverHost = discoverHostByDeviceId,
+  shouldScanSubnet = true,
 }: {
   configuredIp?: string;
   configuredMac?: string;
@@ -35,6 +36,7 @@ export const resolveTuyaLocalHost = async ({
   deviceId: string;
   lookupIp?: typeof lookupIpByMac;
   discoverHost?: typeof discoverHostByDeviceId;
+  shouldScanSubnet?: boolean;
 }): Promise<ResolvedLocalHost> => {
   if (configuredIp) {
     return { host: configuredIp };
@@ -42,7 +44,7 @@ export const resolveTuyaLocalHost = async ({
 
   if (configuredMac) {
     try {
-      const hostFromMac = await lookupIp({ mac: configuredMac, shouldScanSubnet: true });
+      const hostFromMac = await lookupIp({ mac: configuredMac, shouldScanSubnet });
       if (hostFromMac) {
         console.log(`Resolved TUYA_LOCAL_MAC to ${hostFromMac}`);
         return { host: hostFromMac };
@@ -55,6 +57,10 @@ export const resolveTuyaLocalHost = async ({
 
   if (fallbackHost) {
     return { host: fallbackHost };
+  }
+
+  if (!shouldScanSubnet) {
+    return {};
   }
 
   return discoverHost(deviceId);

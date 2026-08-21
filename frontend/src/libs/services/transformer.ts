@@ -36,6 +36,7 @@ export const transformCatalogFromAPI = (catalog: CatalogAPI): Catalog => {
   return {
     infraredId: catalog.infraredId,
     exportedAt: catalog.exportedAt,
+    localHost: catalog.local.host,
     remotes: catalog.remotes.map(transformCatalogRemoteFromAPI),
   };
 };

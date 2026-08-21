@@ -11,7 +11,7 @@ import type { useAppLayout } from './useAppLayout';
 
 type Props = ReturnType<typeof useAppLayout>;
 
-export const AppLayout: FC<Props> = ({ children }) => {
+export const AppLayout: FC<Props> = ({ children, localHost }) => {
   return (
     <Box
       sx={{
@@ -23,8 +23,11 @@ export const AppLayout: FC<Props> = ({ children }) => {
     >
       <AppBar position="static">
         <Toolbar sx={{ gap: 2 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" sx={{ flexGrow: 1, minWidth: 0 }}>
             Tuya HA IR Bridge
+            <Typography component="span" variant="body2" sx={{ ml: 2, opacity: 0.85 }}>
+              {localHost ? `Blaster ${localHost}` : 'Blaster LAN IP unknown'}
+            </Typography>
           </Typography>
           <Button color="inherit" component={RouterLink} to="/">
             Mapper
