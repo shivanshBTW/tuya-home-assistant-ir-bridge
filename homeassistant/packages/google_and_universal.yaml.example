@@ -33,3 +33,7 @@
 # Expose the discovered fan / light / media_player / climate entities in
 # Settings → Voice assistants → Expose, or with Nabu Casa / Google Assistant
 # YAML. Do not expose Tuya's own remotes.
+#
+# Extra TV IR keys (Home, Netflix, d-pad, HDMI cycle, settings, …) appear as
+# button.* entities on the same MQTT device. Use those in Lovelace / automations;
+# Google Home will not get a Netflix/Home intent from IR.

@@ -76,6 +76,8 @@ Uses `network_mode: host` so Tuya UDP discovery and TCP 6668 work. Point HA MQTT
 
 Expose the MQTT `fan` / `light` / `media_player` / `climate` entities (Nabu Casa or Google Assistant integration). Then: `Hey Google, sync my devices`.
 
+TV extras (Home, Netflix, d-pad, HDMI cycle, settings, …) are MQTT **buttons** on the same HA device. Google Home only sees the TV `media_player` (on/off, volume, mute, play, last HDMI). Use the buttons in dashboards and automations.
+
 See [homeassistant/packages/google_and_universal.yaml.example](homeassistant/packages/google_and_universal.yaml.example) for a TV+soundbar Universal Media Player sketch.
 
 Do **not** expose Tuya’s own remotes.

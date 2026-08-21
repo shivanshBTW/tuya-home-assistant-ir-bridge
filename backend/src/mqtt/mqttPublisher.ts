@@ -1,6 +1,10 @@
 import mqtt from 'mqtt';
 import type { AppConfig } from '../config.js';
-import { FAN_SPEED_COUNT } from '../templates/deviceTemplates.js';
+import {
+  FAN_SPEED_COUNT,
+  TV_HDMI_SOURCE_NAME,
+  listTvButtonSlots,
+} from '../templates/deviceTemplates.js';
 import type {
   ClimateAssumedState,
   DeviceMapping,
@@ -117,9 +121,13 @@ export class MqttPublisher {
       );
       await this.client.subscribe(commandTopic);
       await this.client.subscribe(percentageCommandTopic);
-      await this.client.publish(topic(prefix, [...base, 'fan', 'state']), fanState.isOn ? 'ON' : 'OFF', {
-        retain: true,
-      });
+      await this.client.publish(
+        topic(prefix, [...base, 'fan', 'state']),
+        fanState.isOn ? 'ON' : 'OFF',
+        {
+          retain: true,
+        },
+      );
       await this.client.publish(
         topic(prefix, [...base, 'fan', 'percentage']),
         String(fanState.speed),
@@ -154,7 +162,11 @@ export class MqttPublisher {
     if (device.template === 'tv' || device.template === 'soundbar') {
       const mediaState = asMediaState(device.assumedState);
       const commandTopic = topic(prefix, [...base, 'media', 'set']);
+      const volumeUpTopic = topic(prefix, [...base, 'media', 'volume_up']);
+      const volumeDownTopic = topic(prefix, [...base, 'media', 'volume_down']);
+      const sourceCommandTopic = topic(prefix, [...base, 'media', 'source', 'set']);
       const deviceClass = device.template === 'tv' ? 'tv' : 'speaker';
+      const hasHdmiSource = device.template === 'tv' && Boolean(device.slots.source_hdmi);
       await this.client.publish(
         topic(prefix, ['media_player', BRIDGE_ID, device.id, 'config']),
         JSON.stringify({
@@ -166,16 +178,33 @@ export class MqttPublisher {
           payload_play: 'PLAY',
           payload_pause: 'PAUSE',
           payload_stop: 'STOP',
+          volume_up_command_topic: volumeUpTopic,
+          volume_down_command_topic: volumeDownTopic,
+          ...(hasHdmiSource
+            ? {
+                source_list: [TV_HDMI_SOURCE_NAME],
+                source_command_topic: sourceCommandTopic,
+              }
+            : {}),
           device: { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name },
         }),
         { retain: true },
       );
       await this.client.subscribe(commandTopic);
+      await this.client.subscribe(volumeUpTopic);
+      await this.client.subscribe(volumeDownTopic);
+      if (hasHdmiSource) {
+        await this.client.subscribe(sourceCommandTopic);
+      }
       await this.client.publish(
         topic(prefix, [...base, 'media', 'state']),
         mediaState.isOn ? 'ON' : 'OFF',
         { retain: true },
       );
+
+      if (device.template === 'tv') {
+        await this.publishTvButtonEntities(device);
+      }
       return;
     }
 
@@ -210,6 +239,36 @@ export class MqttPublisher {
         String(climateState.temperatureC),
         { retain: true },
       );
+    }
+  }
+
+  private async publishTvButtonEntities(device: DeviceMapping): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+    const prefix = this.appConfig.mqttDiscoveryPrefix;
+    const base = [BRIDGE_ID, device.id];
+    const haDevice = { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name };
+
+    for (const slot of listTvButtonSlots()) {
+      const configTopic = topic(prefix, ['button', BRIDGE_ID, `${device.id}_${slot.id}`, 'config']);
+      if (!device.slots[slot.id]) {
+        await this.client.publish(configTopic, '', { retain: true });
+        continue;
+      }
+      const commandTopic = topic(prefix, [...base, 'button', slot.id, 'set']);
+      await this.client.publish(
+        configTopic,
+        JSON.stringify({
+          name: `${device.name} ${slot.label}`,
+          unique_id: `${BRIDGE_ID}_${device.id}_${slot.id}`,
+          command_topic: commandTopic,
+          payload_press: 'PRESS',
+          device: haDevice,
+        }),
+        { retain: true },
+      );
+      await this.client.subscribe(commandTopic);
     }
   }
 
@@ -263,21 +322,35 @@ export class MqttPublisher {
         device.assumedState = fanState;
       } else if (device.template === 'tv' || device.template === 'soundbar') {
         const mediaState = asMediaState(device.assumedState);
-        const command = payload.toUpperCase();
-        if (command === 'ON' || command === 'OFF') {
-          mediaState.isOn = command === 'ON';
-          await sendSlot('power');
-        } else if (command === 'PLAY') {
-          await sendSlot('play');
-        } else if (command === 'PAUSE') {
-          await sendSlot('pause');
-        } else if (command === 'VOLUME_UP') {
+        if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
+          const slotId = parts[4];
+          if (!slotId) {
+            return;
+          }
+          await sendSlot(slotId);
+        } else if (messageTopic.endsWith('/media/volume_up')) {
           await sendSlot('vol_up');
-        } else if (command === 'VOLUME_DOWN') {
+        } else if (messageTopic.endsWith('/media/volume_down')) {
           await sendSlot('vol_down');
-        } else if (command === 'MUTE') {
-          mediaState.isMuted = !mediaState.isMuted;
-          await sendSlot('mute');
+        } else if (messageTopic.endsWith('/media/source/set')) {
+          await sendSlot('source_hdmi');
+        } else {
+          const command = payload.toUpperCase();
+          if (command === 'ON' || command === 'OFF') {
+            mediaState.isOn = command === 'ON';
+            await sendSlot('power');
+          } else if (command === 'PLAY') {
+            await sendSlot('play');
+          } else if (command === 'PAUSE') {
+            await sendSlot('pause');
+          } else if (command === 'VOLUME_UP') {
+            await sendSlot('vol_up');
+          } else if (command === 'VOLUME_DOWN') {
+            await sendSlot('vol_down');
+          } else if (command === 'MUTE') {
+            mediaState.isMuted = !mediaState.isMuted;
+            await sendSlot('mute');
+          }
         }
         device.assumedState = mediaState;
       } else {

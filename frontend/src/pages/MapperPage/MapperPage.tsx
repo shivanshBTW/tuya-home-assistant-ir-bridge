@@ -80,7 +80,11 @@ export const MapperPage: FC<Props> = ({
             </Select>
           </FormControl>
 
-          <Box component="form" onSubmit={onCreateDevice} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Box
+            component="form"
+            onSubmit={onCreateDevice}
+            sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}
+          >
             <TextField
               label="HA device name"
               {...createForm.register('name', { required: true })}
@@ -169,8 +173,15 @@ export const MapperPage: FC<Props> = ({
           <Typography variant="h6" sx={{ mb: 2 }}>
             HA slots {selectedDevice ? `— ${selectedDevice.name}` : ''}
           </Typography>
-          {!selectedDevice && <Alert severity="info">Create or select a mapping.</Alert>}
           <Stack spacing={1}>
+            {!selectedDevice && <Alert severity="info">Create or select a mapping.</Alert>}
+            {selectedDevice?.template === 'tv' && (
+              <Alert severity="info">
+                Power, volume, mute, play/pause, and last HDMI go to Google as a TV. Home, d-pad,
+                Netflix, settings, HDMI cycle, and the rest become Home Assistant buttons on the
+                same device.
+              </Alert>
+            )}
             {(selectedTemplate?.slots ?? []).map((slot) => {
               const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;
               return (
