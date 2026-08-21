@@ -15,7 +15,6 @@ import {
   findAcLibraryButton,
   findAcPowerButton,
   isAcHvacMode,
-  normalizeAcHvacMode,
   publishedAcFanMode,
 } from '../templates/acCommand.js';
 import {
@@ -107,6 +106,7 @@ export class MqttPublisher {
       }
       const climateKind = climateCommandKindFromTopic(messageTopic);
       if (climateKind) {
+        console.log(`MQTT climate command ${deviceId} ${climateKind}=${payload.toString()}`);
         this.enqueueClimateCommand({
           deviceId,
           command: { kind: climateKind, payload: payload.toString() },
@@ -500,10 +500,14 @@ export class MqttPublisher {
     const catalog = await this.jsonStore.readCatalog();
     const mapping = await this.jsonStore.readMapping();
     if (!catalog) {
+      console.warn(`MQTT climate ignored for ${deviceId}: no catalog`);
       return;
     }
     const device = mapping.devices.find((item) => item.id === deviceId);
     if (!device || device.template !== 'ac') {
+      console.warn(
+        `MQTT climate ignored for ${deviceId}: ${device ? device.template : 'unknown device'}`,
+      );
       return;
     }
 
@@ -520,53 +524,44 @@ export class MqttPublisher {
     };
     await this.jsonStore.writeMapping(nextMapping);
 
-    const hasClimateChanged =
-      previousClimateState.isOn !== nextState.isOn ||
-      rememberedAcTemperatureC(previousClimateState) !== rememberedAcTemperatureC(nextState) ||
-      publishedAcFanMode(previousClimateState) !== publishedAcFanMode(nextState) ||
-      normalizeAcHvacMode(previousClimateState.mode) !== normalizeAcHvacMode(nextState.mode);
-
     const sendAcButton = async (buttonId: string) => {
-      await sendCatalogButton({
+      const sendResult = await sendCatalogButton({
         catalog,
         buttonId,
         cloudClient: this.getCloudClient(),
         configuredIp: this.appConfig.tuyaLocalIp,
         configuredMac: this.appConfig.tuyaLocalMac,
       });
+      console.log(
+        `MQTT climate sent ${deviceId} ${buttonId} via ${sendResult.path} remote ${sendResult.remoteId}`,
+      );
     };
 
     try {
-      if (hasClimateChanged) {
-        if (!nextState.isOn) {
-          if (previousClimateState.isOn) {
-            await sendAcButton(
-              findAcPowerButton({
-                catalog,
-                remoteId: device.tuyaRemoteId,
-                isOn: false,
-              }).id,
-            );
-          }
-        } else {
-          if (!previousClimateState.isOn) {
-            await sendAcButton(
-              findAcPowerButton({
-                catalog,
-                remoteId: device.tuyaRemoteId,
-                isOn: true,
-              }).id,
-            );
-          }
-          await sendAcButton(
-            findAcLibraryButton({
-              catalog,
-              remoteId: device.tuyaRemoteId,
-              state: nextState,
-            }).id,
-          );
-        }
+      if (!nextState.isOn) {
+        const powerOff = findAcPowerButton({
+          catalog,
+          remoteId: device.tuyaRemoteId,
+          isOn: false,
+        });
+        await sendAcButton(powerOff.id);
+        return;
       }
+      if (!previousClimateState.isOn) {
+        const powerOn = findAcPowerButton({
+          catalog,
+          remoteId: device.tuyaRemoteId,
+          isOn: true,
+        });
+        await sendAcButton(powerOn.id);
+      }
+      const climateButton = findAcLibraryButton({
+        catalog,
+        remoteId: device.tuyaRemoteId,
+        state: nextState,
+      });
+      console.log(`MQTT climate key ${deviceId} ${climateButton.key}`);
+      await sendAcButton(climateButton.id);
     } catch (error) {
       console.error(
         `MQTT climate command failed for ${deviceId}: ${
