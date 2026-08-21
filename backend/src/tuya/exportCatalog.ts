@@ -1,14 +1,11 @@
 import type { Catalog, CatalogButton, CatalogRemote, LocalDevice } from '../types.js';
 import type { TuyaCloudClient } from './cloudClient.js';
-
-interface TuyaRemoteListItem {
-  remote_id?: string;
-  remote_name?: string;
-  category_id?: number;
-  brand_id?: number;
-  brand_name?: string;
-  remote_index?: number;
-}
+import {
+  fetchDeviceDetail,
+  fetchInfraredRemotes,
+  lookupGatewayId,
+  resolveInfraredHubId,
+} from './remoteList.js';
 
 interface TuyaKeyItem {
   key?: string;
@@ -32,21 +29,6 @@ interface TuyaLearnedCode {
   code?: string;
   remote_id?: string;
 }
-
-interface TuyaDeviceDetail {
-  id?: string;
-  local_key?: string;
-  ip?: string;
-  product_id?: string;
-  model?: string;
-}
-
-const asRemoteList = (value: unknown): TuyaRemoteListItem[] => {
-  if (Array.isArray(value)) {
-    return value as TuyaRemoteListItem[];
-  }
-  return [];
-};
 
 const flattenButtons = ({
   remoteId,
@@ -93,20 +75,42 @@ const flattenButtons = ({
 
 export const exportCatalog = async ({
   cloudClient,
-  infraredId,
+  infraredId: requestedInfraredId,
   localOverrides,
 }: {
   cloudClient: TuyaCloudClient;
   infraredId: string;
   localOverrides: LocalDevice;
 }): Promise<Catalog> => {
-  const remotesRaw = await cloudClient.request<unknown>({
-    method: 'GET',
-    path: `/v2.0/infrareds/${infraredId}/remotes`,
-  });
-  const remoteList = asRemoteList(remotesRaw);
+  let deviceDetail = await fetchDeviceDetail({ cloudClient, deviceId: requestedInfraredId });
+  if (deviceDetail.sub && !deviceDetail.gateway_id) {
+    const gatewayId = await lookupGatewayId({
+      cloudClient,
+      deviceId: requestedInfraredId,
+    });
+    if (gatewayId) {
+      deviceDetail = { ...deviceDetail, gateway_id: gatewayId };
+    }
+  }
 
-  console.log(`Found IR hub: ${infraredId}`);
+  const infraredId = resolveInfraredHubId({
+    requestedId: requestedInfraredId,
+    deviceDetail,
+  });
+  if (infraredId !== requestedInfraredId) {
+    console.warn(
+      `TUYA_IR_DEVICE_ID is a virtual remote. Exporting parent IR hub ${infraredId} instead.`,
+    );
+    const hubDetail = await fetchDeviceDetail({ cloudClient, deviceId: infraredId });
+    deviceDetail = {
+      ...hubDetail,
+      local_key: hubDetail.local_key ?? deviceDetail.local_key,
+    };
+  }
+
+  console.log(`Found IR hub: ${infraredId}${deviceDetail.name ? ` (${deviceDetail.name})` : ''}`);
+
+  const remoteList = await fetchInfraredRemotes({ cloudClient, infraredId });
   console.log(`Found ${remoteList.length} remotes`);
 
   const remotes: CatalogRemote[] = [];
@@ -176,18 +180,6 @@ export const exportCatalog = async ({
       codeLibrary,
       buttons,
     });
-  }
-
-  let deviceDetail: TuyaDeviceDetail = {};
-  try {
-    deviceDetail = await cloudClient.request<TuyaDeviceDetail>({
-      method: 'GET',
-      path: `/v1.0/devices/${infraredId}`,
-    });
-  } catch (error) {
-    console.warn(
-      `Device detail unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    );
   }
 
   const local: LocalDevice = {
