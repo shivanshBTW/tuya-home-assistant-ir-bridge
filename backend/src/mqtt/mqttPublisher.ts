@@ -12,20 +12,20 @@ import {
   listTvButtonSlots,
 } from '../templates/deviceTemplates.js';
 import {
-  AC_DEFAULT_TEMPERATURE_C,
-  AC_FAN_MODES,
-  AC_HVAC_MODES,
-  AC_MAX_TEMPERATURE_C,
-  AC_MIN_TEMPERATURE_C,
-  applyAcFanModeCommand,
-  applyAcModeCommand,
-  applyAcPowerCommand,
-  applyAcTemperatureCommand,
   findAcLibraryButton,
   findAcPowerButton,
   isAcHvacMode,
+  normalizeAcHvacMode,
   publishedAcFanMode,
 } from '../templates/acCommand.js';
+import {
+  acClimateDiscoveryPayload,
+  applyClimateMqttBurst,
+  CLIMATE_COMMAND_COALESCE_MS,
+  climateCommandKindFromTopic,
+  rememberedAcTemperatureC,
+  type ClimateMqttCommand,
+} from './climateMqtt.js';
 import type {
   ClimateAssumedState,
   DeviceMapping,
@@ -73,6 +73,9 @@ const asClimateState = (value: DeviceMapping['assumedState']): ClimateAssumedSta
 
 export class MqttPublisher {
   private client: mqtt.MqttClient | undefined;
+  private readonly commandTailByDeviceId = new Map<string, Promise<void>>();
+  private readonly climateBurstByDeviceId = new Map<string, ClimateMqttCommand[]>();
+  private readonly climateFlushScheduledByDeviceId = new Set<string>();
 
   constructor(
     private readonly appConfig: AppConfig,
@@ -97,11 +100,77 @@ export class MqttPublisher {
     });
 
     this.client.on('message', (messageTopic, payload) => {
-      void this.handleCommand({ messageTopic, payload: payload.toString() });
+      const parts = messageTopic.split('/');
+      const deviceId = parts[2];
+      if (!deviceId) {
+        return;
+      }
+      const climateKind = climateCommandKindFromTopic(messageTopic);
+      if (climateKind) {
+        this.enqueueClimateCommand({
+          deviceId,
+          command: { kind: climateKind, payload: payload.toString() },
+        });
+        return;
+      }
+      void this.enqueueDeviceCommand({
+        deviceId,
+        run: () => this.handleCommand({ messageTopic, payload: payload.toString() }),
+      });
     });
 
     await this.publishAll();
     console.log('MQTT discovery published');
+  }
+
+  private enqueueDeviceCommand({
+    deviceId,
+    run,
+  }: {
+    deviceId: string;
+    run: () => Promise<void>;
+  }): Promise<void> {
+    const previous = this.commandTailByDeviceId.get(deviceId) ?? Promise.resolve();
+    const next = previous.then(run, run);
+    this.commandTailByDeviceId.set(
+      deviceId,
+      next.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return next;
+  }
+
+  private enqueueClimateCommand({
+    deviceId,
+    command,
+  }: {
+    deviceId: string;
+    command: ClimateMqttCommand;
+  }): void {
+    const burst = this.climateBurstByDeviceId.get(deviceId) ?? [];
+    burst.push(command);
+    this.climateBurstByDeviceId.set(deviceId, burst);
+    if (this.climateFlushScheduledByDeviceId.has(deviceId)) {
+      return;
+    }
+    this.climateFlushScheduledByDeviceId.add(deviceId);
+    void this.enqueueDeviceCommand({
+      deviceId,
+      run: async () => {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, CLIMATE_COMMAND_COALESCE_MS);
+        });
+        this.climateFlushScheduledByDeviceId.delete(deviceId);
+        const commands = this.climateBurstByDeviceId.get(deviceId) ?? [];
+        this.climateBurstByDeviceId.delete(deviceId);
+        if (commands.length === 0) {
+          return;
+        }
+        await this.handleClimateBurst({ deviceId, commands });
+      },
+    });
   }
 
   async publishAll(): Promise<void> {
@@ -243,39 +312,52 @@ export class MqttPublisher {
       return;
     }
 
-    const climateState = asClimateState(device.assumedState);
     const climateCommandTopic = topic(prefix, [...base, 'climate', 'mode', 'set']);
     const powerCommandTopic = topic(prefix, [...base, 'climate', 'power', 'set']);
     const temperatureCommandTopic = topic(prefix, [...base, 'climate', 'temperature', 'set']);
     const fanModeCommandTopic = topic(prefix, [...base, 'climate', 'fan_mode', 'set']);
+    const modeStateTopic = topic(prefix, [...base, 'climate', 'mode']);
+    const powerStateTopic = topic(prefix, [...base, 'climate', 'power']);
+    const temperatureStateTopic = topic(prefix, [...base, 'climate', 'temperature']);
+    const currentTemperatureTopic = topic(prefix, [...base, 'climate', 'current_temperature']);
+    const fanModeStateTopic = topic(prefix, [...base, 'climate', 'fan_mode']);
     await this.client.publish(
       topic(prefix, ['climate', BRIDGE_ID, device.id, 'config']),
-      JSON.stringify({
-        name: device.name,
-        unique_id: `${BRIDGE_ID}_${device.id}_climate`,
-        mode_command_topic: climateCommandTopic,
-        mode_state_topic: topic(prefix, [...base, 'climate', 'mode']),
-        modes: [...AC_HVAC_MODES],
-        power_command_topic: powerCommandTopic,
-        power_state_topic: topic(prefix, [...base, 'climate', 'power']),
-        payload_on: 'ON',
-        payload_off: 'OFF',
-        temperature_command_topic: temperatureCommandTopic,
-        temperature_state_topic: topic(prefix, [...base, 'climate', 'temperature']),
-        min_temp: AC_MIN_TEMPERATURE_C,
-        max_temp: AC_MAX_TEMPERATURE_C,
-        temp_step: 1,
-        fan_mode_command_topic: fanModeCommandTopic,
-        fan_mode_state_topic: topic(prefix, [...base, 'climate', 'fan_mode']),
-        fan_modes: [...AC_FAN_MODES],
-        device: { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name },
-      }),
+      JSON.stringify(
+        acClimateDiscoveryPayload({
+          name: device.name,
+          uniqueId: `${BRIDGE_ID}_${device.id}_climate`,
+          deviceName: device.name,
+          deviceIdentifier: `${BRIDGE_ID}_${device.id}`,
+          modeCommandTopic: climateCommandTopic,
+          modeStateTopic,
+          powerCommandTopic,
+          powerStateTopic,
+          temperatureCommandTopic,
+          temperatureStateTopic,
+          currentTemperatureTopic,
+          fanModeCommandTopic,
+          fanModeStateTopic,
+        }),
+      ),
       { retain: true },
     );
     await this.client.subscribe(climateCommandTopic);
     await this.client.subscribe(powerCommandTopic);
     await this.client.subscribe(temperatureCommandTopic);
     await this.client.subscribe(fanModeCommandTopic);
+    await this.publishClimateState(device);
+    await this.publishAcExtraEntities(device);
+  }
+
+  private async publishClimateState(device: DeviceMapping): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+    const prefix = this.appConfig.mqttDiscoveryPrefix;
+    const base = [BRIDGE_ID, device.id];
+    const climateState = asClimateState(device.assumedState);
+    const rememberedTemperatureC = rememberedAcTemperatureC(climateState);
     await this.client.publish(
       topic(prefix, [...base, 'climate', 'power']),
       climateState.isOn ? 'ON' : 'OFF',
@@ -288,7 +370,12 @@ export class MqttPublisher {
     );
     await this.client.publish(
       topic(prefix, [...base, 'climate', 'temperature']),
-      String(climateState.temperatureC ?? AC_DEFAULT_TEMPERATURE_C),
+      String(rememberedTemperatureC),
+      { retain: true },
+    );
+    await this.client.publish(
+      topic(prefix, [...base, 'climate', 'current_temperature']),
+      String(rememberedTemperatureC),
       { retain: true },
     );
     await this.client.publish(
@@ -296,7 +383,6 @@ export class MqttPublisher {
       publishedAcFanMode(climateState),
       { retain: true },
     );
-    await this.publishAcExtraEntities(device);
   }
 
   private async publishMappedButtonEntities({
@@ -404,6 +490,92 @@ export class MqttPublisher {
     }
   }
 
+  private async handleClimateBurst({
+    deviceId,
+    commands,
+  }: {
+    deviceId: string;
+    commands: ClimateMqttCommand[];
+  }): Promise<void> {
+    const catalog = await this.jsonStore.readCatalog();
+    const mapping = await this.jsonStore.readMapping();
+    if (!catalog) {
+      return;
+    }
+    const device = mapping.devices.find((item) => item.id === deviceId);
+    if (!device || device.template !== 'ac') {
+      return;
+    }
+
+    const previousClimateState = asClimateState(device.assumedState);
+    const nextState = applyClimateMqttBurst({
+      state: previousClimateState,
+      commands,
+    });
+    device.assumedState = nextState;
+    await this.publishClimateState(device);
+    const nextMapping: MappingFile = {
+      ...mapping,
+      devices: mapping.devices.map((item) => (item.id === device.id ? device : item)),
+    };
+    await this.jsonStore.writeMapping(nextMapping);
+
+    const hasClimateChanged =
+      previousClimateState.isOn !== nextState.isOn ||
+      rememberedAcTemperatureC(previousClimateState) !== rememberedAcTemperatureC(nextState) ||
+      publishedAcFanMode(previousClimateState) !== publishedAcFanMode(nextState) ||
+      normalizeAcHvacMode(previousClimateState.mode) !== normalizeAcHvacMode(nextState.mode);
+
+    const sendAcButton = async (buttonId: string) => {
+      await sendCatalogButton({
+        catalog,
+        buttonId,
+        cloudClient: this.getCloudClient(),
+        configuredIp: this.appConfig.tuyaLocalIp,
+        configuredMac: this.appConfig.tuyaLocalMac,
+      });
+    };
+
+    try {
+      if (hasClimateChanged) {
+        if (!nextState.isOn) {
+          if (previousClimateState.isOn) {
+            await sendAcButton(
+              findAcPowerButton({
+                catalog,
+                remoteId: device.tuyaRemoteId,
+                isOn: false,
+              }).id,
+            );
+          }
+        } else {
+          if (!previousClimateState.isOn) {
+            await sendAcButton(
+              findAcPowerButton({
+                catalog,
+                remoteId: device.tuyaRemoteId,
+                isOn: true,
+              }).id,
+            );
+          }
+          await sendAcButton(
+            findAcLibraryButton({
+              catalog,
+              remoteId: device.tuyaRemoteId,
+              state: nextState,
+            }).id,
+          );
+        }
+      }
+    } catch (error) {
+      console.error(
+        `MQTT climate command failed for ${deviceId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   private async handleCommand({
     messageTopic,
     payload,
@@ -493,44 +665,6 @@ export class MqttPublisher {
         device.assumedState = mediaState;
       } else {
         const previousClimateState = asClimateState(device.assumedState);
-        const sendAcButton = async (buttonId: string) => {
-          await sendCatalogButton({
-            catalog,
-            buttonId,
-            cloudClient: this.getCloudClient(),
-            configuredIp: this.appConfig.tuyaLocalIp,
-            configuredMac: this.appConfig.tuyaLocalMac,
-          });
-        };
-        const sendAcClimate = async (nextState: ClimateAssumedState) => {
-          if (!nextState.isOn) {
-            await sendAcButton(
-              findAcPowerButton({
-                catalog,
-                remoteId: device.tuyaRemoteId,
-                isOn: false,
-              }).id,
-            );
-            return;
-          }
-          if (!previousClimateState.isOn) {
-            await sendAcButton(
-              findAcPowerButton({
-                catalog,
-                remoteId: device.tuyaRemoteId,
-                isOn: true,
-              }).id,
-            );
-          }
-          await sendAcButton(
-            findAcLibraryButton({
-              catalog,
-              remoteId: device.tuyaRemoteId,
-              state: nextState,
-            }).id,
-          );
-        };
-
         if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
           const slotId = parts[4];
           if (!slotId) {
@@ -545,49 +679,6 @@ export class MqttPublisher {
           await sendSlot(slotId);
           previousClimateState.powerSaving = payload;
           device.assumedState = previousClimateState;
-        } else if (messageTopic.endsWith('/climate/power/set')) {
-          const nextState = applyAcPowerCommand({
-            state: previousClimateState,
-            isOn: payload.toUpperCase() === 'ON',
-          });
-          await sendAcClimate(nextState);
-          device.assumedState = nextState;
-        } else if (messageTopic.endsWith('/climate/mode/set')) {
-          if (payload === 'off') {
-            const nextState = applyAcPowerCommand({ state: previousClimateState, isOn: false });
-            await sendAcClimate(nextState);
-            device.assumedState = nextState;
-          } else {
-            const nextState = applyAcModeCommand({ state: previousClimateState, mode: payload });
-            if (!nextState) {
-              await this.publishDevice(device);
-              return;
-            }
-            await sendAcClimate(nextState);
-            device.assumedState = nextState;
-          }
-        } else if (messageTopic.endsWith('/climate/temperature/set')) {
-          const nextState = applyAcTemperatureCommand({
-            state: previousClimateState,
-            temperatureC: Number(payload),
-          });
-          if (!nextState) {
-            await this.publishDevice(device);
-            return;
-          }
-          await sendAcClimate(nextState);
-          device.assumedState = nextState;
-        } else if (messageTopic.endsWith('/climate/fan_mode/set')) {
-          const nextState = applyAcFanModeCommand({
-            state: previousClimateState,
-            fanMode: payload,
-          });
-          if (!nextState) {
-            await this.publishDevice(device);
-            return;
-          }
-          await sendAcClimate(nextState);
-          device.assumedState = nextState;
         } else {
           return;
         }
@@ -598,7 +689,11 @@ export class MqttPublisher {
         devices: mapping.devices.map((item) => (item.id === device.id ? device : item)),
       };
       await this.jsonStore.writeMapping(nextMapping);
-      await this.publishDevice(device);
+      if (device.template === 'ac') {
+        await this.publishClimateState(device);
+      } else {
+        await this.publishDevice(device);
+      }
     } catch (error) {
       console.error(
         `MQTT command failed for ${messageTopic}: ${
