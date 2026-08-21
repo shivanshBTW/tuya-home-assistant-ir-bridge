@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter backend --filter frontend dev",
     "dev:backend": "pnpm --filter backend dev",
-    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:frontend": "pnpm --filter frontend dev --host",
     "build": "pnpm --filter backend build && pnpm --filter frontend build",
     "export": "pnpm --filter backend export",
     "start": "pnpm --filter backend start",
