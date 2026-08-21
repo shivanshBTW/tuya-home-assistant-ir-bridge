@@ -17,10 +17,10 @@ export const fetchHealth = async (): Promise<{ ok: boolean }> => {
   return requestBridge<{ ok: boolean }>({ path: '/api/health' });
 };
 
-export const fetchCatalog = async (): Promise<Catalog | undefined> => {
-  const response = await requestBridge<{ catalog?: CatalogAPI }>({ path: '/api/catalog' });
+export const fetchCatalog = async (): Promise<Catalog | null> => {
+  const response = await requestBridge<{ catalog: CatalogAPI | null }>({ path: '/api/catalog' });
   if (!response.catalog) {
-    return undefined;
+    return null;
   }
   return transformCatalogFromAPI(response.catalog);
 };

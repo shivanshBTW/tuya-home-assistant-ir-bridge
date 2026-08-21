@@ -86,7 +86,7 @@ export const registerRoutes = ({
 
   app.get('/api/catalog', async () => {
     const catalog = await jsonStore.readCatalog();
-    return { catalog: await redactCatalog(catalog) };
+    return { catalog: (await redactCatalog(catalog)) ?? null };
   });
 
   app.post('/api/export', async () => {
