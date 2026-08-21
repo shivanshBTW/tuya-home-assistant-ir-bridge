@@ -19,6 +19,10 @@ export const shouldSendCatalogButtonLocally = (button: CatalogButton): boolean =
   return Boolean(button.code) && !button.id.includes(':library:');
 };
 
+export const shouldPreferCloudSend = (button: CatalogButton): boolean => {
+  return button.source === 'learned';
+};
+
 export const sendCatalogButton = async ({
   catalog,
   buttonId,
@@ -38,8 +42,26 @@ export const sendCatalogButton = async ({
     throw new Error(`Unknown remote ${button.remoteId}`);
   }
 
-  const irCode = button.code;
-  if (irCode && shouldSendCatalogButtonLocally(button) && catalog.local.key) {
+  const sendViaCloud = async (): Promise<SendResult> => {
+    if (!cloudClient) {
+      throw new Error(
+        `No raw IR code for button ${button.keyName} and Tuya Cloud is not configured for fallback`,
+      );
+    }
+    await sendCloudButton({
+      cloudClient,
+      infraredId: catalog.infraredId,
+      remote,
+      button,
+    });
+    return { path: SEND_PATH_CLOUD, buttonId: button.id, remoteId: remote.remoteId };
+  };
+
+  const sendViaLocal = async (): Promise<SendResult | undefined> => {
+    const irCode = button.code;
+    if (!irCode || !shouldSendCatalogButtonLocally(button) || !catalog.local.key) {
+      return undefined;
+    }
     const resolved = await resolveTuyaLocalHost({
       configuredIp,
       configuredMac: configuredMac ?? catalog.local.mac,
@@ -52,32 +74,39 @@ export const sendCatalogButton = async ({
       host: resolved.host,
       version: resolved.discoveredVersion ?? catalog.local.version,
     };
+    if (!localDevice.host) {
+      return undefined;
+    }
+    try {
+      await sendLocalIrCode({ localDevice, code: irCode });
+      console.log(`Local IR sent to ${localDevice.host} for ${button.keyName}`);
+      return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
+    } catch (error) {
+      console.warn(
+        `Local send failed, will try cloud if configured: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return undefined;
+    }
+  };
 
-    if (localDevice.host) {
-      try {
-        await sendLocalIrCode({ localDevice, code: irCode });
-        return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
-      } catch (error) {
-        console.warn(
-          `Local send failed, will try cloud if configured: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
+  if (shouldPreferCloudSend(button) && cloudClient) {
+    try {
+      return await sendViaCloud();
+    } catch (error) {
+      console.warn(
+        `Cloud send failed for ${button.keyName}, will try local: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
-  if (!cloudClient) {
-    throw new Error(
-      `No raw IR code for button ${button.keyName} and Tuya Cloud is not configured for fallback`,
-    );
+  const localResult = await sendViaLocal();
+  if (localResult) {
+    return localResult;
   }
 
-  await sendCloudButton({
-    cloudClient,
-    infraredId: catalog.infraredId,
-    remote,
-    button,
-  });
-  return { path: SEND_PATH_CLOUD, buttonId: button.id, remoteId: remote.remoteId };
+  return sendViaCloud();
 };
