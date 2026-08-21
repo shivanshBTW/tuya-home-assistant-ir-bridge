@@ -16,6 +16,21 @@ import type { useMapperPage } from './useMapperPage';
 
 type Props = ReturnType<typeof useMapperPage>;
 
+const panePaperSx = {
+  p: 2,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  minHeight: 0,
+  overflow: 'hidden',
+} as const;
+
+const paneScrollSx = {
+  overflow: 'auto',
+  minHeight: 0,
+  flex: 1,
+} as const;
+
 export const MapperPage: FC<Props> = ({
   isCatalogLoading,
   catalogErrorMessage,
@@ -56,13 +71,15 @@ export const MapperPage: FC<Props> = ({
   }
 
   return (
-    <Stack spacing={3}>
-      <Typography variant="h4">Build HA remotes</Typography>
-      <Typography color="text.secondary">
-        Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot.
-      </Typography>
+    <Stack spacing={3} sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+      <Box sx={{ flexShrink: 0 }}>
+        <Typography variant="h4">Build HA remotes</Typography>
+        <Typography color="text.secondary">
+          Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot.
+        </Typography>
+      </Box>
 
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: 2, flexShrink: 0 }}>
         <Stack spacing={2}>
           <FormControl fullWidth>
             <InputLabel id="remote-label">Tuya remote (button catalog)</InputLabel>
@@ -130,12 +147,19 @@ export const MapperPage: FC<Props> = ({
         </Stack>
       </Paper>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
-            Tuya buttons
-          </Typography>
-          <Stack spacing={1}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gridTemplateRows: { xs: 'minmax(0, 1fr) minmax(0, 1fr)', md: 'minmax(0, 1fr)' },
+          gap: 2,
+          flex: 1,
+          minHeight: 0,
+        }}
+      >
+        <Paper sx={panePaperSx}>
+          <Typography variant="h6">Tuya buttons</Typography>
+          <Stack spacing={1} sx={paneScrollSx}>
             {(selectedRemote?.buttons ?? []).map((button) => (
               <Box
                 key={button.id}
@@ -169,11 +193,11 @@ export const MapperPage: FC<Props> = ({
           </Stack>
         </Paper>
 
-        <Paper sx={{ p: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
+        <Paper sx={panePaperSx}>
+          <Typography variant="h6">
             HA slots {selectedDevice ? `— ${selectedDevice.name}` : ''}
           </Typography>
-          <Stack spacing={1}>
+          <Stack spacing={1} sx={paneScrollSx}>
             {!selectedDevice && <Alert severity="info">Create or select a mapping.</Alert>}
             {selectedDevice?.template === 'tv' && (
               <Alert severity="info">

@@ -1,3 +1,4 @@
+import Box from '@mui/material/Box';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastContainer } from 'material-react-toastify';
 import { BrowserRouter, Route, Routes } from 'react-router';
@@ -15,11 +16,13 @@ export const App = () => {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AppLayout>
-            <Routes>
-              <Route path="/" element={<MapperPage />} />
-              <Route path="/keypad" element={<KeypadPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Routes>
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <Routes>
+                <Route path="/" element={<MapperPage />} />
+                <Route path="/keypad" element={<KeypadPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Routes>
+            </Box>
           </AppLayout>
         </BrowserRouter>
         <ToastContainer position="bottom-right" />

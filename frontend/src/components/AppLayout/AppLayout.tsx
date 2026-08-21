@@ -13,7 +13,7 @@ type Props = ReturnType<typeof useAppLayout>;
 
 export const AppLayout: FC<Props> = ({ children }) => {
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="static">
         <Toolbar sx={{ gap: 2 }}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
@@ -31,7 +31,17 @@ export const AppLayout: FC<Props> = ({ children }) => {
           <ColorModeToggle />
         </Toolbar>
       </AppBar>
-      <Container maxWidth="lg" sx={{ py: 3, flexGrow: 1 }}>
+      <Container
+        maxWidth="lg"
+        sx={{
+          py: 3,
+          flexGrow: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'auto',
+        }}
+      >
         {children}
       </Container>
     </Box>
