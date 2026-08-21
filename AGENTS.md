@@ -124,23 +124,3 @@ export const ComponentName: React.FC<Props> = (
 ## Config Files
 
 - Nx: `nx.json` · TS: `tsconfig.base.json` + per-project · ESLint: `eslint.config.cjs` (flat) · Prettier: `.prettierrc`
-
-## Available Skills
-
-Read the skill file before starting any task that matches its description.
-
-| Skill                                     | Use when                                                                                                    | Skill file                                                                    |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| add-staging-env                           | Adding a new staging environment to app.                                                                    | [SKILL.md](.agents/skills/add-staging-env/SKILL.md)                           |
-| igniteui-react-components                 | Choosing Ignite UI React components, project setup, component JSX, events, or React state/form integration. | [SKILL.md](.agents/skills/igniteui-react-components/SKILL.md)                 |
-| igniteui-react-customize-theme            | Brand colors, dark mode, component-level overrides, or scoped themes for Ignite UI React.                   | [SKILL.md](.agents/skills/igniteui-react-customize-theme/SKILL.md)            |
-| igniteui-react-generate-from-image-design | Building a working React view with Ignite UI from a design image (screenshot, mockup, wireframe).           | [SKILL.md](.agents/skills/igniteui-react-generate-from-image-design/SKILL.md) |
-| igniteui-react-optimize-bundle-size       | Bundle too large, setting up tree-shaking, or lazy loading heavy components like grids and charts.          | [SKILL.md](.agents/skills/igniteui-react-optimize-bundle-size/SKILL.md)       |
-| link-workspace-packages                   | Wiring dependencies between monorepo packages, or "cannot find module" errors for workspace packages.       | [SKILL.md](.agents/skills/link-workspace-packages/SKILL.md)                   |
-| modernize-component                       | Modernizing a monolithic component to a container/presenter split.                                          | [SKILL.md](.agents/skills/modernize-component/SKILL.md)                       |
-| monitor-ci                                | Monitoring the Nx Cloud CI pipeline and self-healing fixes for the current branch.                          | [SKILL.md](.agents/skills/monitor-ci/SKILL.md)                                |
-| nx-generate                               | Scaffolding apps, libraries, features, or project structure with Nx generators.                             | [SKILL.md](.agents/skills/nx-generate/SKILL.md)                               |
-| nx-import                                 | Importing, merging, or combining external repositories into this Nx workspace.                              | [SKILL.md](.agents/skills/nx-import/SKILL.md)                                 |
-| nx-plugins                                | Discovering Nx plugins or adding support for a new framework or technology.                                 | [SKILL.md](.agents/skills/nx-plugins/SKILL.md)                                |
-| nx-run-tasks                              | Running build, test, lint, serve, or other Nx workspace tasks.                                              | [SKILL.md](.agents/skills/nx-run-tasks/SKILL.md)                              |
-| nx-workspace                              | Exploring workspace structure, project configuration, available targets, or debugging Nx task failures.     | [SKILL.md](.agents/skills/nx-workspace/SKILL.md)                              |
