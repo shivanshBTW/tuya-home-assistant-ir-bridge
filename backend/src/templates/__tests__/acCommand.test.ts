@@ -85,10 +85,7 @@ describe('resolveAcLibraryKey', () => {
   });
 
   it('sends dry as M4_S1 only', () => {
-    assert.equal(
-      resolveAcLibraryKey({ mode: 'dry', temperatureC: 22, fanMode: 'high' }),
-      'M4_S1',
-    );
+    assert.equal(resolveAcLibraryKey({ mode: 'dry', temperatureC: 22, fanMode: 'high' }), 'M4_S1');
   });
 
   it('sends fan-only with last cool temp as dummy T and never S0', () => {
@@ -161,6 +158,55 @@ describe('findAc library buttons', () => {
   });
 
   it('looks up the cool medium key from assumed state', () => {
-    assert.equal(findAcLibraryButton({ catalog, remoteId: 'bedroom-ac', state: coolState() }).key, 'M0_T24_S2');
+    assert.equal(
+      findAcLibraryButton({ catalog, remoteId: 'bedroom-ac', state: coolState() }).key,
+      'M0_T24_S2',
+    );
+  });
+
+  it('uses a sibling library remote when the mapped custom remote has no M_T_S keys', () => {
+    const catalogWithCustom: Catalog = {
+      ...catalog,
+      remotes: [
+        {
+          remoteId: 'lg-custom',
+          remote: {},
+          keys: {},
+          learningCodes: [],
+          buttons: [
+            {
+              id: 'custom-on',
+              remoteId: 'lg-custom',
+              key: 'PowerOn',
+              keyName: 'PowerOn',
+              source: 'key',
+              raw: {},
+            },
+            {
+              id: 'custom-fan',
+              remoteId: 'lg-custom',
+              key: 'F',
+              keyName: 'F',
+              source: 'key',
+              raw: {},
+            },
+          ],
+        },
+        ...catalog.remotes,
+      ],
+    };
+
+    assert.equal(
+      findAcLibraryButton({
+        catalog: catalogWithCustom,
+        remoteId: 'lg-custom',
+        state: coolState({ temperatureC: 24, fanMode: 'medium' }),
+      }).id,
+      'cool',
+    );
+    assert.equal(
+      findAcPowerButton({ catalog: catalogWithCustom, remoteId: 'lg-custom', isOn: true }).key,
+      'PowerOn',
+    );
   });
 });

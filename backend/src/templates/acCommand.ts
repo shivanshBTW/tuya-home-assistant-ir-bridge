@@ -74,14 +74,19 @@ export const findRemoteButtonByKeys = ({
   remoteId: string;
   keys: readonly string[];
 }): CatalogButton => {
-  const remote = catalog.remotes.find((item) => item.remoteId === remoteId);
-  if (!remote) {
+  const preferredRemote = catalog.remotes.find((item) => item.remoteId === remoteId);
+  const remotesToSearch = preferredRemote
+    ? [preferredRemote, ...catalog.remotes.filter((item) => item.remoteId !== remoteId)]
+    : catalog.remotes;
+  if (remotesToSearch.length === 0) {
     throw new Error(`Unknown Tuya remote ${remoteId}`);
   }
-  for (const key of keys) {
-    const button = remote.buttons.find((item) => item.key === key);
-    if (button) {
-      return button;
+  for (const remote of remotesToSearch) {
+    for (const key of keys) {
+      const button = remote.buttons.find((item) => item.key === key);
+      if (button) {
+        return button;
+      }
     }
   }
   throw new Error(`Remote ${remoteId} has no key among ${keys.join(', ')}`);
