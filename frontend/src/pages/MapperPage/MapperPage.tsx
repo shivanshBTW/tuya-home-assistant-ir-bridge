@@ -217,15 +217,21 @@ export const MapperPage: FC<Props> = ({
           {(selectedDevice?.template === 'tv' || selectedTemplate?.id === 'tv') && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               Power, volume, mute, play/pause, and last HDMI go to Google as a TV. Home, d-pad,
-              Netflix, settings, HDMI cycle, and the rest become Home Assistant buttons on the
-              same device.
+              Netflix, settings, HDMI cycle, and the rest become Home Assistant buttons on the same
+              device.
+            </Alert>
+          )}
+          {(selectedDevice?.template === 'soundbar' || selectedTemplate?.id === 'soundbar') && (
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+              Power, volume, mute, next, and previous go to Google as a speaker. Input, settings,
+              equalizer, set +/−, and pair become Home Assistant buttons on the same device.
             </Alert>
           )}
           {(selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
-              speed are sent from the Bedroom Air Conditioner library automatically. These six
-              slots are optional Home Assistant extras from the Custom remote.
+              speed are sent from the Bedroom Air Conditioner library automatically. These six slots
+              are optional Home Assistant extras from the Custom remote.
             </Alert>
           )}
           <Stack spacing={1} sx={paneScrollSx}>

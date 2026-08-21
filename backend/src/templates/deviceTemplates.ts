@@ -12,6 +12,15 @@ const TV_MEDIA_PLAYER_SLOT_IDS = new Set([
   'source_hdmi',
 ]);
 
+const SOUNDBAR_MEDIA_PLAYER_SLOT_IDS = new Set([
+  'power',
+  'vol_up',
+  'vol_down',
+  'mute',
+  'next',
+  'previous',
+]);
+
 export const TV_HDMI_SOURCE_NAME = 'HDMI';
 
 export const AC_POWER_SAVING_SLOT_IDS = [
@@ -92,6 +101,14 @@ export const DEVICE_TEMPLATES: DeviceTemplate[] = [
       { id: 'vol_up', label: 'Volume +', isRequired: true },
       { id: 'vol_down', label: 'Volume −', isRequired: true },
       { id: 'mute', label: 'Mute', isRequired: false },
+      { id: 'next', label: 'Next', isRequired: false },
+      { id: 'previous', label: 'Previous', isRequired: false },
+      { id: 'input', label: 'Input', isRequired: false },
+      { id: 'settings', label: 'Settings', isRequired: false },
+      { id: 'equalize', label: 'Equalizer', isRequired: false },
+      { id: 'set_up', label: 'Set +', isRequired: false },
+      { id: 'set_down', label: 'Set −', isRequired: false },
+      { id: 'pair', label: 'Pair / Info', isRequired: false },
     ],
   },
   {
@@ -129,6 +146,21 @@ export const listMappedTvButtonSlots = (device: DeviceMapping): SlotDefinition[]
     return [];
   }
   return listTvButtonSlots().filter((slot) => Boolean(device.slots[slot.id]));
+};
+
+export const isSoundbarMediaPlayerSlotId = (slotId: string): boolean => {
+  return SOUNDBAR_MEDIA_PLAYER_SLOT_IDS.has(slotId);
+};
+
+export const listSoundbarButtonSlots = (): SlotDefinition[] => {
+  return getTemplateById('soundbar').slots.filter((slot) => !isSoundbarMediaPlayerSlotId(slot.id));
+};
+
+export const listMappedSoundbarButtonSlots = (device: DeviceMapping): SlotDefinition[] => {
+  if (device.template !== 'soundbar') {
+    return [];
+  }
+  return listSoundbarButtonSlots().filter((slot) => Boolean(device.slots[slot.id]));
 };
 
 export const listAcButtonSlots = (): SlotDefinition[] => {

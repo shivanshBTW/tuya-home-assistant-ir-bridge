@@ -8,6 +8,7 @@ import {
   acPowerSavingSlotIdByOption,
   listAcButtonSlots,
   listAcPowerSavingSlots,
+  listSoundbarButtonSlots,
   listTvButtonSlots,
 } from '../templates/deviceTemplates.js';
 import {
@@ -31,6 +32,7 @@ import type {
   FanAssumedState,
   MappingFile,
   MediaAssumedState,
+  SlotDefinition,
 } from '../types.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
 import type { TuyaCloudClient } from '../tuya/cloudClient.js';
@@ -188,6 +190,8 @@ export class MqttPublisher {
       const sourceCommandTopic = topic(prefix, [...base, 'media', 'source', 'set']);
       const deviceClass = device.template === 'tv' ? 'tv' : 'speaker';
       const hasHdmiSource = device.template === 'tv' && Boolean(device.slots.source_hdmi);
+      const hasNextTrack = Boolean(device.slots.next);
+      const hasPreviousTrack = Boolean(device.slots.previous);
       await this.client.publish(
         topic(prefix, ['media_player', BRIDGE_ID, device.id, 'config']),
         JSON.stringify({
@@ -201,6 +205,8 @@ export class MqttPublisher {
           payload_stop: 'STOP',
           volume_up_command_topic: volumeUpTopic,
           volume_down_command_topic: volumeDownTopic,
+          ...(hasNextTrack ? { payload_next: 'NEXT' } : {}),
+          ...(hasPreviousTrack ? { payload_previous: 'PREVIOUS' } : {}),
           ...(hasHdmiSource
             ? {
                 source_list: [TV_HDMI_SOURCE_NAME],
@@ -224,7 +230,15 @@ export class MqttPublisher {
       );
 
       if (device.template === 'tv') {
-        await this.publishTvButtonEntities(device);
+        await this.publishMappedButtonEntities({
+          device,
+          slots: listTvButtonSlots(),
+        });
+      } else {
+        await this.publishMappedButtonEntities({
+          device,
+          slots: listSoundbarButtonSlots(),
+        });
       }
       return;
     }
@@ -285,7 +299,13 @@ export class MqttPublisher {
     await this.publishAcExtraEntities(device);
   }
 
-  private async publishTvButtonEntities(device: DeviceMapping): Promise<void> {
+  private async publishMappedButtonEntities({
+    device,
+    slots,
+  }: {
+    device: DeviceMapping;
+    slots: SlotDefinition[];
+  }): Promise<void> {
     if (!this.client) {
       return;
     }
@@ -293,7 +313,7 @@ export class MqttPublisher {
     const base = [BRIDGE_ID, device.id];
     const haDevice = { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name };
 
-    for (const slot of listTvButtonSlots()) {
+    for (const slot of slots) {
       const configTopic = topic(prefix, ['button', BRIDGE_ID, `${device.id}_${slot.id}`, 'config']);
       if (!device.slots[slot.id]) {
         await this.client.publish(configTopic, '', { retain: true });
@@ -348,7 +368,12 @@ export class MqttPublisher {
     const mappedPowerSavingSlots = listAcPowerSavingSlots().filter((slot) =>
       Boolean(device.slots[slot.id]),
     );
-    const selectConfigTopic = topic(prefix, ['select', BRIDGE_ID, `${device.id}_power_saving`, 'config']);
+    const selectConfigTopic = topic(prefix, [
+      'select',
+      BRIDGE_ID,
+      `${device.id}_power_saving`,
+      'config',
+    ]);
     if (mappedPowerSavingSlots.length === 0) {
       await this.client.publish(selectConfigTopic, '', { retain: true });
       return;
@@ -450,6 +475,10 @@ export class MqttPublisher {
             await sendSlot('play');
           } else if (command === 'PAUSE') {
             await sendSlot('pause');
+          } else if (command === 'NEXT') {
+            await sendSlot('next');
+          } else if (command === 'PREVIOUS') {
+            await sendSlot('previous');
           } else if (command === 'VOLUME_UP') {
             await sendSlot('vol_up');
           } else if (command === 'VOLUME_DOWN') {

@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   getTemplateById,
+  isSoundbarMediaPlayerSlotId,
   isTvMediaPlayerSlotId,
   listAcButtonSlots,
   listAcPowerSavingSlots,
+  listMappedSoundbarButtonSlots,
   listMappedTvButtonSlots,
+  listSoundbarButtonSlots,
   listTvButtonSlots,
 } from '../deviceTemplates.js';
 
@@ -65,6 +68,58 @@ describe('TV template slots', () => {
   });
 });
 
+describe('Soundbar template slots', () => {
+  it('keeps Google speaker commands separate from HA-only buttons', () => {
+    assert.equal(isSoundbarMediaPlayerSlotId('power'), true);
+    assert.equal(isSoundbarMediaPlayerSlotId('next'), true);
+    assert.equal(isSoundbarMediaPlayerSlotId('previous'), true);
+    assert.equal(isSoundbarMediaPlayerSlotId('mute'), true);
+    assert.equal(isSoundbarMediaPlayerSlotId('input'), false);
+    assert.equal(isSoundbarMediaPlayerSlotId('equalize'), false);
+  });
+
+  it('matches the Zeb Soundbar catalog extras', () => {
+    const slotIds = getTemplateById('soundbar').slots.map((slot) => slot.id);
+    assert.deepEqual(slotIds, [
+      'power',
+      'vol_up',
+      'vol_down',
+      'mute',
+      'next',
+      'previous',
+      'input',
+      'settings',
+      'equalize',
+      'set_up',
+      'set_down',
+      'pair',
+    ]);
+    assert.deepEqual(
+      listSoundbarButtonSlots().map((slot) => slot.id),
+      ['input', 'settings', 'equalize', 'set_up', 'set_down', 'pair'],
+    );
+  });
+
+  it('only publishes mapped extra soundbar slots as HA buttons', () => {
+    const mapped = listMappedSoundbarButtonSlots({
+      id: 'zeb_soundbar',
+      name: 'Zeb Soundbar',
+      template: 'soundbar',
+      tuyaRemoteId: 'remote-1',
+      slots: {
+        power: { buttonId: 'b-power' },
+        input: { buttonId: 'b-input' },
+        equalize: { buttonId: 'b-eq' },
+      },
+      assumedState: { isOn: false, isMuted: false },
+    });
+    assert.deepEqual(
+      mapped.map((slot) => slot.id),
+      ['input', 'equalize'],
+    );
+  });
+});
+
 describe('AC template slots', () => {
   it('only lists extras that exist on the custom remote, not climate library keys', () => {
     const slotIds = getTemplateById('ac').slots.map((slot) => slot.id);
@@ -76,11 +131,13 @@ describe('AC template slots', () => {
       'sleep',
       'timer',
     ]);
+    assert.equal(slotIds.includes('mode_heat'), false);
     assert.equal(
-      slotIds.includes('mode_heat'),
-      false,
+      listAcButtonSlots()
+        .map((slot) => slot.id)
+        .join(','),
+      'sleep,timer',
     );
-    assert.equal(listAcButtonSlots().map((slot) => slot.id).join(','), 'sleep,timer');
     assert.equal(listAcPowerSavingSlots().length, 4);
   });
 });
