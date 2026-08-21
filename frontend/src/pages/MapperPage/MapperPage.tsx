@@ -224,7 +224,7 @@ export const MapperPage: FC<Props> = ({
           {(selectedDevice?.template === 'soundbar' || selectedTemplate?.id === 'soundbar') && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               Power, volume, mute, next, and previous go to Google as a speaker. Input, settings,
-              equalizer, set +/−, and pair become Home Assistant buttons on the same device.
+              equalizer, settings +/−, and pair become Home Assistant buttons on the same device.
             </Alert>
           )}
           {(selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (

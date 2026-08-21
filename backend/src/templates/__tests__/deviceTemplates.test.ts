@@ -90,13 +90,13 @@ describe('Soundbar template slots', () => {
       'input',
       'settings',
       'equalize',
-      'set_up',
-      'set_down',
+      'settings_up',
+      'settings_down',
       'pair',
     ]);
     assert.deepEqual(
       listSoundbarButtonSlots().map((slot) => slot.id),
-      ['input', 'settings', 'equalize', 'set_up', 'set_down', 'pair'],
+      ['input', 'settings', 'equalize', 'settings_up', 'settings_down', 'pair'],
     );
   });
 
