@@ -83,7 +83,7 @@ export const exportCatalog = async ({
   localOverrides: LocalDevice;
 }): Promise<Catalog> => {
   let deviceDetail = await fetchDeviceDetail({ cloudClient, deviceId: requestedInfraredId });
-  if (deviceDetail.sub && !deviceDetail.gateway_id) {
+  if (deviceDetail.sub && !deviceDetail.gateway_id && !deviceDetail.parent_id) {
     const gatewayId = await lookupGatewayId({
       cloudClient,
       deviceId: requestedInfraredId,
@@ -110,7 +110,12 @@ export const exportCatalog = async ({
 
   console.log(`Found IR hub: ${infraredId}${deviceDetail.name ? ` (${deviceDetail.name})` : ''}`);
 
-  const remoteList = await fetchInfraredRemotes({ cloudClient, infraredId });
+  const remoteList = await fetchInfraredRemotes({
+    cloudClient,
+    infraredId,
+    uid: deviceDetail.uid,
+    ownerId: deviceDetail.owner_id,
+  });
   console.log(`Found ${remoteList.length} remotes`);
 
   const remotes: CatalogRemote[] = [];

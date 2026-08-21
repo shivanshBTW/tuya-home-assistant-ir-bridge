@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { parseRemoteList, resolveInfraredHubId } from '../remoteList.js';
+import {
+  parseRemoteList,
+  resolveInfraredHubId,
+  shouldIncludeAccountDeviceAsRemote,
+} from '../remoteList.js';
 
 describe('parseRemoteList', () => {
   it('reads a top-level array of remotes', () => {
@@ -70,6 +74,68 @@ describe('resolveInfraredHubId', () => {
         deviceDetail: { id: 'virtual-tv', sub: true, gateway_id: 'hub-1' },
       }),
       'hub-1',
+    );
+  });
+
+  it('uses parent_id when gateway_id is missing', () => {
+    assert.equal(
+      resolveInfraredHubId({
+        requestedId: 'virtual-tv',
+        deviceDetail: { id: 'virtual-tv', sub: true, parent_id: 'hub-1' },
+      }),
+      'hub-1',
+    );
+  });
+});
+
+describe('shouldIncludeAccountDeviceAsRemote', () => {
+  const infraredId = 'smart-ir';
+
+  it('includes Smart Life infrared_* siblings of the hub', () => {
+    assert.equal(
+      shouldIncludeAccountDeviceAsRemote({
+        infraredId,
+        device: { id: 'fan', name: 'Bedroom Fan', category: 'infrared_fan' },
+      }),
+      true,
+    );
+    assert.equal(
+      shouldIncludeAccountDeviceAsRemote({
+        infraredId,
+        device: { id: 'tv', name: 'Vu TV', category: 'infrared_tv' },
+      }),
+      true,
+    );
+    assert.equal(
+      shouldIncludeAccountDeviceAsRemote({
+        infraredId,
+        device: { id: 'ac', name: 'LG AC', category: 'infrared_ac' },
+      }),
+      true,
+    );
+  });
+
+  it('excludes the hub and non-IR Wi-Fi devices', () => {
+    assert.equal(
+      shouldIncludeAccountDeviceAsRemote({
+        infraredId,
+        device: { id: infraredId, name: 'Smart IR', category: 'qt' },
+      }),
+      false,
+    );
+    assert.equal(
+      shouldIncludeAccountDeviceAsRemote({
+        infraredId,
+        device: { id: 'switch', name: '4 Touch switch', category: 'kg' },
+      }),
+      false,
+    );
+    assert.equal(
+      shouldIncludeAccountDeviceAsRemote({
+        infraredId,
+        device: { id: 'heater', name: 'Heater', category: 'qn' },
+      }),
+      false,
     );
   });
 });

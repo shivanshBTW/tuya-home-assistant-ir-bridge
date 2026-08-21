@@ -20,6 +20,9 @@ export interface TuyaDeviceDetail {
   category?: string;
   sub?: boolean;
   gateway_id?: string;
+  parent_id?: string;
+  uid?: string;
+  owner_id?: string;
 }
 
 export interface TuyaAssociatedDevice {
@@ -29,6 +32,19 @@ export interface TuyaAssociatedDevice {
   gateway_id?: string;
   category?: string;
 }
+
+const IR_HUB_CATEGORIES = new Set(['qt', 'wnykq']);
+
+export const isInfraredRemoteCategory = (category: string | undefined): boolean => {
+  if (!category) {
+    return false;
+  }
+  return category === 'infrared' || category.startsWith('infrared_');
+};
+
+export const isInfraredHubCategory = (category: string | undefined): boolean => {
+  return Boolean(category && IR_HUB_CATEGORIES.has(category));
+};
 
 interface TuyaAssociatedDevicesResult {
   devices?: TuyaAssociatedDevice[];
@@ -122,10 +138,70 @@ export const resolveInfraredHubId = ({
   requestedId: string;
   deviceDetail: TuyaDeviceDetail;
 }): string => {
-  if (deviceDetail.sub && deviceDetail.gateway_id) {
-    return deviceDetail.gateway_id;
+  if (deviceDetail.sub && (deviceDetail.gateway_id || deviceDetail.parent_id)) {
+    return deviceDetail.gateway_id ?? deviceDetail.parent_id ?? requestedId;
   }
   return deviceDetail.id ?? requestedId;
+};
+
+const toAssociatedDevice = (value: unknown): TuyaAssociatedDevice | undefined => {
+  const item = asRecord(value);
+  if (!item || item.id === undefined || item.id === null || String(item.id) === '') {
+    return undefined;
+  }
+  const gatewayId =
+    (typeof item.gateway_id === 'string' && item.gateway_id) ||
+    (typeof item.parent_id === 'string' && item.parent_id) ||
+    undefined;
+  return {
+    id: String(item.id),
+    name: typeof item.name === 'string' ? item.name : undefined,
+    sub: item.sub === true,
+    gateway_id: gatewayId,
+    category: typeof item.category === 'string' ? item.category : undefined,
+  };
+};
+
+export const parseAssociatedDevices = (value: unknown): TuyaAssociatedDevice[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const device = toAssociatedDevice(item);
+      return device ? [device] : [];
+    });
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return [];
+  }
+  if (record.devices !== undefined) {
+    return parseAssociatedDevices(record.devices);
+  }
+  if (record.result !== undefined) {
+    return parseAssociatedDevices(record.result);
+  }
+  if (record.list !== undefined) {
+    return parseAssociatedDevices(record.list);
+  }
+  return [];
+};
+
+export const shouldIncludeAccountDeviceAsRemote = ({
+  device,
+  infraredId,
+}: {
+  device: TuyaAssociatedDevice;
+  infraredId: string;
+}): boolean => {
+  if (!device.id || device.id === infraredId) {
+    return false;
+  }
+  if (isInfraredHubCategory(device.category)) {
+    return false;
+  }
+  if (device.gateway_id === infraredId) {
+    return true;
+  }
+  return isInfraredRemoteCategory(device.category);
 };
 
 const mergeRemoteById = (remotes: TuyaRemoteListItem[]): TuyaRemoteListItem[] => {
@@ -163,6 +239,17 @@ const requestOrUndefined = async <T>(
   }
 };
 
+const mergeAccountDevices = (devices: TuyaAssociatedDevice[]): TuyaAssociatedDevice[] => {
+  const deviceById: Record<string, TuyaAssociatedDevice> = {};
+  for (const device of devices) {
+    if (!device.id) {
+      continue;
+    }
+    deviceById[device.id] = { ...deviceById[device.id], ...device };
+  }
+  return Object.values(deviceById);
+};
+
 const listAssociatedDevices = async (
   cloudClient: TuyaCloudClient,
 ): Promise<TuyaAssociatedDevice[]> => {
@@ -180,13 +267,67 @@ const listAssociatedDevices = async (
     if (!page) {
       break;
     }
-    devices.push(...(page.devices ?? []));
+    devices.push(...parseAssociatedDevices(page));
     if (!page.has_more || !page.last_row_key) {
       break;
     }
     lastRowKey = page.last_row_key;
   }
   return devices;
+};
+
+const listAccountDevices = async ({
+  cloudClient,
+  uid,
+  ownerId,
+}: {
+  cloudClient: TuyaCloudClient;
+  uid?: string;
+  ownerId?: string;
+}): Promise<TuyaAssociatedDevice[]> => {
+  const collected: TuyaAssociatedDevice[] = [...(await listAssociatedDevices(cloudClient))];
+
+  if (uid) {
+    const userDevices = await requestOrUndefined<unknown>(cloudClient, {
+      method: 'GET',
+      path: `/v1.0/users/${uid}/devices`,
+      query: { page_no: 1, page_size: 100 },
+    });
+    collected.push(...parseAssociatedDevices(userDevices));
+  }
+
+  if (ownerId) {
+    const homeDevices = await requestOrUndefined<unknown>(cloudClient, {
+      method: 'GET',
+      path: `/v1.0/homes/${ownerId}/devices`,
+    });
+    collected.push(...parseAssociatedDevices(homeDevices));
+  }
+
+  return mergeAccountDevices(collected);
+};
+
+const accountDeviceHasInfraredKeys = async ({
+  cloudClient,
+  infraredId,
+  remoteId,
+}: {
+  cloudClient: TuyaCloudClient;
+  infraredId: string;
+  remoteId: string;
+}): Promise<boolean> => {
+  const keys = await requestOrUndefined<unknown>(cloudClient, {
+    method: 'GET',
+    path: `/v2.0/infrareds/${infraredId}/remotes/${remoteId}/keys`,
+  });
+  if (keys !== undefined) {
+    return true;
+  }
+  const learningCodes = await requestOrUndefined<unknown>(cloudClient, {
+    method: 'GET',
+    path: `/v2.0/infrareds/${infraredId}/remotes/${remoteId}/learning-codes`,
+  });
+  return Array.isArray(learningCodes) ? learningCodes.length > 0 : learningCodes !== undefined;
 };
 
 export const lookupGatewayId = async ({
@@ -217,9 +358,13 @@ export const fetchDeviceDetail = async ({
 export const fetchInfraredRemotes = async ({
   cloudClient,
   infraredId,
+  uid,
+  ownerId,
 }: {
   cloudClient: TuyaCloudClient;
   infraredId: string;
+  uid?: string;
+  ownerId?: string;
 }): Promise<TuyaRemoteListItem[]> => {
   const collected: TuyaRemoteListItem[] = [];
 
@@ -248,15 +393,12 @@ export const fetchInfraredRemotes = async ({
     ...parseRemoteList(subDevices).filter((remote) => remote.remote_id !== infraredId),
   );
 
-  const associatedDevices = await listAssociatedDevices(cloudClient);
-  if (associatedDevices.length > 0) {
-    console.log(`Associated account devices: ${associatedDevices.length}`);
+  const accountDevices = await listAccountDevices({ cloudClient, uid, ownerId });
+  if (accountDevices.length > 0) {
+    console.log(`Account devices: ${accountDevices.length}`);
     collected.push(
-      ...associatedDevices.flatMap((device) => {
-        if (!device.id || device.id === infraredId) {
-          return [];
-        }
-        if (device.gateway_id !== infraredId) {
+      ...accountDevices.flatMap((device) => {
+        if (!shouldIncludeAccountDeviceAsRemote({ device, infraredId })) {
           return [];
         }
         return [
@@ -268,13 +410,39 @@ export const fetchInfraredRemotes = async ({
       }),
     );
 
-    const otherHubs = associatedDevices.filter((device) => {
-      if (!device.id || device.id === infraredId || device.sub) {
-        return false;
+    const collectedIds = new Set(
+      collected.flatMap((remote) => (remote.remote_id ? [remote.remote_id] : [])),
+    );
+    for (const device of accountDevices) {
+      if (!device.id || collectedIds.has(device.id) || device.id === infraredId) {
+        continue;
       }
-      const category = device.category ?? '';
-      return category === 'qt' || category === 'wnykq' || category.includes('infrared');
-    });
+      if (isInfraredHubCategory(device.category)) {
+        continue;
+      }
+      const hasInfraredKeys = await accountDeviceHasInfraredKeys({
+        cloudClient,
+        infraredId,
+        remoteId: device.id,
+      });
+      if (!hasInfraredKeys) {
+        continue;
+      }
+      console.log(`Treating ${device.name ?? device.id} as an IR remote (keys API)`);
+      collected.push({
+        remote_id: device.id,
+        remote_name: device.name ?? device.id,
+      });
+      collectedIds.add(device.id);
+    }
+
+    const otherHubs = accountDevices.filter(
+      (device) =>
+        Boolean(device.id) &&
+        device.id !== infraredId &&
+        !device.sub &&
+        isInfraredHubCategory(device.category),
+    );
     if (otherHubs.length > 0) {
       console.warn(
         `Other IR hubs on this account (not included in this export): ${otherHubs
