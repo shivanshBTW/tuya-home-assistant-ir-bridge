@@ -221,6 +221,13 @@ export const MapperPage: FC<Props> = ({
               same device.
             </Alert>
           )}
+          {selectedDevice?.template === 'ac' && (
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+              Cool, dry, and fan-only plus temperature and fan come from the Bedroom library
+              keys automatically. Assign Custom remote buttons to power saving, sleep, and timer;
+              those stay Home Assistant extras on the same device.
+            </Alert>
+          )}
           <Stack spacing={1} sx={paneScrollSx}>
             {(selectedTemplate?.slots ?? []).map((slot) => {
               const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;

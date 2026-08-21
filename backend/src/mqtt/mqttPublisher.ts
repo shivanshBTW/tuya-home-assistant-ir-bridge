@@ -3,8 +3,28 @@ import type { AppConfig } from '../config.js';
 import {
   FAN_SPEED_COUNT,
   TV_HDMI_SOURCE_NAME,
+  AC_POWER_SAVING_OPTION_BY_SLOT_ID,
+  AC_POWER_SAVING_SLOT_IDS,
+  acPowerSavingSlotIdByOption,
+  listAcButtonSlots,
+  listAcPowerSavingSlots,
   listTvButtonSlots,
 } from '../templates/deviceTemplates.js';
+import {
+  AC_DEFAULT_TEMPERATURE_C,
+  AC_FAN_MODES,
+  AC_HVAC_MODES,
+  AC_MAX_TEMPERATURE_C,
+  AC_MIN_TEMPERATURE_C,
+  applyAcFanModeCommand,
+  applyAcModeCommand,
+  applyAcPowerCommand,
+  applyAcTemperatureCommand,
+  findAcLibraryButton,
+  findAcPowerButton,
+  isAcHvacMode,
+  publishedAcFanMode,
+} from '../templates/acCommand.js';
 import type {
   ClimateAssumedState,
   DeviceMapping,
@@ -45,6 +65,7 @@ const asClimateState = (value: DeviceMapping['assumedState']): ClimateAssumedSta
     mode: state.mode,
     temperatureC: state.temperatureC,
     fanMode: state.fanMode,
+    powerSaving: state.powerSaving,
   };
 };
 
@@ -210,6 +231,9 @@ export class MqttPublisher {
 
     const climateState = asClimateState(device.assumedState);
     const climateCommandTopic = topic(prefix, [...base, 'climate', 'mode', 'set']);
+    const powerCommandTopic = topic(prefix, [...base, 'climate', 'power', 'set']);
+    const temperatureCommandTopic = topic(prefix, [...base, 'climate', 'temperature', 'set']);
+    const fanModeCommandTopic = topic(prefix, [...base, 'climate', 'fan_mode', 'set']);
     await this.client.publish(
       topic(prefix, ['climate', BRIDGE_ID, device.id, 'config']),
       JSON.stringify({
@@ -217,29 +241,48 @@ export class MqttPublisher {
         unique_id: `${BRIDGE_ID}_${device.id}_climate`,
         mode_command_topic: climateCommandTopic,
         mode_state_topic: topic(prefix, [...base, 'climate', 'mode']),
-        modes: ['off', 'cool', 'heat', 'fan_only', 'dry'],
-        temperature_command_topic: topic(prefix, [...base, 'climate', 'temperature', 'set']),
+        modes: [...AC_HVAC_MODES],
+        power_command_topic: powerCommandTopic,
+        power_state_topic: topic(prefix, [...base, 'climate', 'power']),
+        payload_on: 'ON',
+        payload_off: 'OFF',
+        temperature_command_topic: temperatureCommandTopic,
         temperature_state_topic: topic(prefix, [...base, 'climate', 'temperature']),
-        min_temp: 16,
-        max_temp: 30,
+        min_temp: AC_MIN_TEMPERATURE_C,
+        max_temp: AC_MAX_TEMPERATURE_C,
+        temp_step: 1,
+        fan_mode_command_topic: fanModeCommandTopic,
+        fan_mode_state_topic: topic(prefix, [...base, 'climate', 'fan_mode']),
+        fan_modes: [...AC_FAN_MODES],
         device: { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name },
       }),
       { retain: true },
     );
     await this.client.subscribe(climateCommandTopic);
-    await this.client.subscribe(topic(prefix, [...base, 'climate', 'temperature', 'set']));
+    await this.client.subscribe(powerCommandTopic);
+    await this.client.subscribe(temperatureCommandTopic);
+    await this.client.subscribe(fanModeCommandTopic);
     await this.client.publish(
-      topic(prefix, [...base, 'climate', 'mode']),
-      climateState.isOn ? (climateState.mode ?? 'cool') : 'off',
+      topic(prefix, [...base, 'climate', 'power']),
+      climateState.isOn ? 'ON' : 'OFF',
       { retain: true },
     );
-    if (climateState.temperatureC !== undefined) {
-      await this.client.publish(
-        topic(prefix, [...base, 'climate', 'temperature']),
-        String(climateState.temperatureC),
-        { retain: true },
-      );
-    }
+    await this.client.publish(
+      topic(prefix, [...base, 'climate', 'mode']),
+      climateState.mode && isAcHvacMode(climateState.mode) ? climateState.mode : 'cool',
+      { retain: true },
+    );
+    await this.client.publish(
+      topic(prefix, [...base, 'climate', 'temperature']),
+      String(climateState.temperatureC ?? AC_DEFAULT_TEMPERATURE_C),
+      { retain: true },
+    );
+    await this.client.publish(
+      topic(prefix, [...base, 'climate', 'fan_mode']),
+      publishedAcFanMode(climateState),
+      { retain: true },
+    );
+    await this.publishAcExtraEntities(device);
   }
 
   private async publishTvButtonEntities(device: DeviceMapping): Promise<void> {
@@ -269,6 +312,70 @@ export class MqttPublisher {
         { retain: true },
       );
       await this.client.subscribe(commandTopic);
+    }
+  }
+
+  private async publishAcExtraEntities(device: DeviceMapping): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+    const prefix = this.appConfig.mqttDiscoveryPrefix;
+    const base = [BRIDGE_ID, device.id];
+    const haDevice = { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name };
+    const climateState = asClimateState(device.assumedState);
+
+    for (const slot of listAcButtonSlots()) {
+      const configTopic = topic(prefix, ['button', BRIDGE_ID, `${device.id}_${slot.id}`, 'config']);
+      if (!device.slots[slot.id]) {
+        await this.client.publish(configTopic, '', { retain: true });
+        continue;
+      }
+      const commandTopic = topic(prefix, [...base, 'button', slot.id, 'set']);
+      await this.client.publish(
+        configTopic,
+        JSON.stringify({
+          name: `${device.name} ${slot.label}`,
+          unique_id: `${BRIDGE_ID}_${device.id}_${slot.id}`,
+          command_topic: commandTopic,
+          payload_press: 'PRESS',
+          device: haDevice,
+        }),
+        { retain: true },
+      );
+      await this.client.subscribe(commandTopic);
+    }
+
+    const mappedPowerSavingSlots = listAcPowerSavingSlots().filter((slot) =>
+      Boolean(device.slots[slot.id]),
+    );
+    const selectConfigTopic = topic(prefix, ['select', BRIDGE_ID, `${device.id}_power_saving`, 'config']);
+    if (mappedPowerSavingSlots.length === 0) {
+      await this.client.publish(selectConfigTopic, '', { retain: true });
+      return;
+    }
+    const commandTopic = topic(prefix, [...base, 'select', 'power_saving', 'set']);
+    const options = AC_POWER_SAVING_SLOT_IDS.filter((slotId) => Boolean(device.slots[slotId])).map(
+      (slotId) => AC_POWER_SAVING_OPTION_BY_SLOT_ID[slotId],
+    );
+    await this.client.publish(
+      selectConfigTopic,
+      JSON.stringify({
+        name: `${device.name} Power saving`,
+        unique_id: `${BRIDGE_ID}_${device.id}_power_saving`,
+        command_topic: commandTopic,
+        state_topic: topic(prefix, [...base, 'select', 'power_saving']),
+        options,
+        device: haDevice,
+      }),
+      { retain: true },
+    );
+    await this.client.subscribe(commandTopic);
+    if (climateState.powerSaving && options.includes(climateState.powerSaving)) {
+      await this.client.publish(
+        topic(prefix, [...base, 'select', 'power_saving']),
+        climateState.powerSaving,
+        { retain: true },
+      );
     }
   }
 
@@ -354,26 +461,103 @@ export class MqttPublisher {
         }
         device.assumedState = mediaState;
       } else {
-        const climateState = asClimateState(device.assumedState);
-        if (messageTopic.endsWith('/climate/mode/set')) {
-          climateState.isOn = payload !== 'off';
+        const previousClimateState = asClimateState(device.assumedState);
+        const sendAcButton = async (buttonId: string) => {
+          await sendCatalogButton({
+            catalog,
+            buttonId,
+            cloudClient: this.getCloudClient(),
+          });
+        };
+        const sendAcClimate = async (nextState: ClimateAssumedState) => {
+          if (!nextState.isOn) {
+            await sendAcButton(
+              findAcPowerButton({
+                catalog,
+                remoteId: device.tuyaRemoteId,
+                isOn: false,
+              }).id,
+            );
+            return;
+          }
+          if (!previousClimateState.isOn) {
+            await sendAcButton(
+              findAcPowerButton({
+                catalog,
+                remoteId: device.tuyaRemoteId,
+                isOn: true,
+              }).id,
+            );
+          }
+          await sendAcButton(
+            findAcLibraryButton({
+              catalog,
+              remoteId: device.tuyaRemoteId,
+              state: nextState,
+            }).id,
+          );
+        };
+
+        if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
+          const slotId = parts[4];
+          if (!slotId) {
+            return;
+          }
+          await sendSlot(slotId);
+        } else if (messageTopic.endsWith('/select/power_saving/set')) {
+          const slotId = acPowerSavingSlotIdByOption(payload);
+          if (!slotId || !device.slots[slotId]) {
+            return;
+          }
+          await sendSlot(slotId);
+          previousClimateState.powerSaving = payload;
+          device.assumedState = previousClimateState;
+        } else if (messageTopic.endsWith('/climate/power/set')) {
+          const nextState = applyAcPowerCommand({
+            state: previousClimateState,
+            isOn: payload.toUpperCase() === 'ON',
+          });
+          await sendAcClimate(nextState);
+          device.assumedState = nextState;
+        } else if (messageTopic.endsWith('/climate/mode/set')) {
           if (payload === 'off') {
-            await sendSlot('power');
-          } else if (payload === 'fan_only') {
-            climateState.mode = 'fan_only';
-            await sendSlot('mode_fan');
-          } else if (payload === 'cool' || payload === 'heat' || payload === 'dry') {
-            climateState.mode = payload;
-            await sendSlot(`mode_${payload}`);
+            const nextState = applyAcPowerCommand({ state: previousClimateState, isOn: false });
+            await sendAcClimate(nextState);
+            device.assumedState = nextState;
+          } else {
+            const nextState = applyAcModeCommand({ state: previousClimateState, mode: payload });
+            if (!nextState) {
+              await this.publishDevice(device);
+              return;
+            }
+            await sendAcClimate(nextState);
+            device.assumedState = nextState;
           }
         } else if (messageTopic.endsWith('/climate/temperature/set')) {
-          const nextTemperature = Number(payload);
-          if (climateState.temperatureC !== undefined) {
-            await sendSlot(nextTemperature > climateState.temperatureC ? 'temp_up' : 'temp_down');
+          const nextState = applyAcTemperatureCommand({
+            state: previousClimateState,
+            temperatureC: Number(payload),
+          });
+          if (!nextState) {
+            await this.publishDevice(device);
+            return;
           }
-          climateState.temperatureC = nextTemperature;
+          await sendAcClimate(nextState);
+          device.assumedState = nextState;
+        } else if (messageTopic.endsWith('/climate/fan_mode/set')) {
+          const nextState = applyAcFanModeCommand({
+            state: previousClimateState,
+            fanMode: payload,
+          });
+          if (!nextState) {
+            await this.publishDevice(device);
+            return;
+          }
+          await sendAcClimate(nextState);
+          device.assumedState = nextState;
+        } else {
+          return;
         }
-        device.assumedState = climateState;
       }
 
       const nextMapping: MappingFile = {

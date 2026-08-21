@@ -78,6 +78,7 @@ export interface ClimateAssumedState {
   mode?: string;
   temperatureC?: number;
   fanMode?: string;
+  powerSaving?: string;
 }
 
 export interface DeviceMapping {

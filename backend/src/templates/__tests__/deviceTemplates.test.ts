@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 import {
   getTemplateById,
   isTvMediaPlayerSlotId,
+  listAcButtonSlots,
+  listAcPowerSavingSlots,
   listMappedTvButtonSlots,
   listTvButtonSlots,
 } from '../deviceTemplates.js';
@@ -60,5 +62,25 @@ describe('TV template slots', () => {
       listTvButtonSlots().some((slot) => slot.id === 'power'),
       false,
     );
+  });
+});
+
+describe('AC template slots', () => {
+  it('only lists extras that exist on the custom remote, not climate library keys', () => {
+    const slotIds = getTemplateById('ac').slots.map((slot) => slot.id);
+    assert.deepEqual(slotIds, [
+      'power_saving_40',
+      'power_saving_60',
+      'power_saving_80',
+      'power_saving_100',
+      'sleep',
+      'timer',
+    ]);
+    assert.equal(
+      slotIds.includes('mode_heat'),
+      false,
+    );
+    assert.equal(listAcButtonSlots().map((slot) => slot.id).join(','), 'sleep,timer');
+    assert.equal(listAcPowerSavingSlots().length, 4);
   });
 });

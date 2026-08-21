@@ -22,7 +22,7 @@ const defaultAssumedState = (
     return { isOn: false, speed: 1, isLedOn: false };
   }
   if (templateId === 'ac') {
-    return { isOn: false, mode: 'cool', temperatureC: 24 };
+    return { isOn: false, mode: 'cool', temperatureC: 24, fanMode: 'low' };
   }
   return { isOn: false, isMuted: false };
 };

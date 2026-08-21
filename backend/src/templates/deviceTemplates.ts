@@ -14,6 +14,25 @@ const TV_MEDIA_PLAYER_SLOT_IDS = new Set([
 
 export const TV_HDMI_SOURCE_NAME = 'HDMI';
 
+export const AC_POWER_SAVING_SLOT_IDS = [
+  'power_saving_40',
+  'power_saving_60',
+  'power_saving_80',
+  'power_saving_100',
+] as const;
+
+export const AC_POWER_SAVING_OPTION_BY_SLOT_ID: Record<
+  (typeof AC_POWER_SAVING_SLOT_IDS)[number],
+  string
+> = {
+  power_saving_40: '40%',
+  power_saving_60: '60%',
+  power_saving_80: '80%',
+  power_saving_100: '100%',
+};
+
+export const AC_BUTTON_SLOT_IDS = ['sleep', 'timer'] as const;
+
 export const DEVICE_TEMPLATES: DeviceTemplate[] = [
   {
     id: 'fan',
@@ -79,16 +98,12 @@ export const DEVICE_TEMPLATES: DeviceTemplate[] = [
     id: 'ac',
     label: 'Air conditioner',
     slots: [
-      { id: 'power', label: 'Power', isRequired: true },
-      { id: 'mode_cool', label: 'Cool', isRequired: false },
-      { id: 'mode_heat', label: 'Heat', isRequired: false },
-      { id: 'mode_fan', label: 'Fan mode', isRequired: false },
-      { id: 'mode_dry', label: 'Dry', isRequired: false },
-      { id: 'temp_up', label: 'Temp +', isRequired: false },
-      { id: 'temp_down', label: 'Temp −', isRequired: false },
-      { id: 'fan_low', label: 'AC fan low', isRequired: false },
-      { id: 'fan_medium', label: 'AC fan medium', isRequired: false },
-      { id: 'fan_high', label: 'AC fan high', isRequired: false },
+      { id: 'power_saving_40', label: 'Power saving 40%', isRequired: false },
+      { id: 'power_saving_60', label: 'Power saving 60%', isRequired: false },
+      { id: 'power_saving_80', label: 'Power saving 80%', isRequired: false },
+      { id: 'power_saving_100', label: 'Power saving 100%', isRequired: false },
+      { id: 'sleep', label: 'Sleep +1h', isRequired: false },
+      { id: 'timer', label: 'Timer +1h', isRequired: false },
     ],
   },
 ];
@@ -114,4 +129,23 @@ export const listMappedTvButtonSlots = (device: DeviceMapping): SlotDefinition[]
     return [];
   }
   return listTvButtonSlots().filter((slot) => Boolean(device.slots[slot.id]));
+};
+
+export const listAcButtonSlots = (): SlotDefinition[] => {
+  return getTemplateById('ac').slots.filter((slot) =>
+    AC_BUTTON_SLOT_IDS.includes(slot.id as (typeof AC_BUTTON_SLOT_IDS)[number]),
+  );
+};
+
+export const listAcPowerSavingSlots = (): SlotDefinition[] => {
+  return getTemplateById('ac').slots.filter((slot) =>
+    AC_POWER_SAVING_SLOT_IDS.includes(slot.id as (typeof AC_POWER_SAVING_SLOT_IDS)[number]),
+  );
+};
+
+export const acPowerSavingSlotIdByOption = (option: string): string | undefined => {
+  const entry = Object.entries(AC_POWER_SAVING_OPTION_BY_SLOT_ID).find(
+    ([, label]) => label === option,
+  );
+  return entry?.[0];
 };
