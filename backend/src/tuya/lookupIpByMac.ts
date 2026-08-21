@@ -89,7 +89,7 @@ export const hostsInSubnet = ({
 };
 
 const isIpv4Interface = (networkInterface: NetworkInterfaceInfo): boolean => {
-  return networkInterface.family === 'IPv4' || networkInterface.family === 4;
+  return networkInterface.family === 'IPv4';
 };
 
 export const collectIpv4Subnets = (
@@ -102,9 +102,7 @@ export const collectIpv4Subnets = (
         continue;
       }
       const prefixLength =
-        item.cidr !== undefined
-          ? Number(item.cidr.split('/')[1])
-          : prefixLengthFromNetmask(item.netmask);
+        item.cidr != null ? Number(item.cidr.split('/')[1]) : prefixLengthFromNetmask(item.netmask);
       if (!Number.isInteger(prefixLength)) {
         continue;
       }

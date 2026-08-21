@@ -27,7 +27,7 @@ describe('hostsInSubnet', () => {
 });
 
 describe('collectIpv4Subnets', () => {
-  it('skips internal and IPv6 addresses', () => {
+  it('skips internal and IPv6 addresses, and uses netmask when cidr is null', () => {
     const subnets = collectIpv4Subnets({
       lo0: [
         {
@@ -49,6 +49,14 @@ describe('collectIpv4Subnets', () => {
           cidr: '192.168.1.10/24',
         },
         {
+          address: '10.0.0.5',
+          netmask: '255.255.255.0',
+          family: 'IPv4',
+          mac: 'aa:bb:cc:dd:ee:ff',
+          internal: false,
+          cidr: null,
+        },
+        {
           address: 'fe80::1',
           netmask: 'ffff:ffff:ffff:ffff::',
           family: 'IPv6',
@@ -62,6 +70,7 @@ describe('collectIpv4Subnets', () => {
 
     assert.deepEqual(subnets, [
       { address: '192.168.1.10', prefixLength: 24, broadcast: '192.168.1.255' },
+      { address: '10.0.0.5', prefixLength: 24, broadcast: '10.0.0.255' },
     ]);
   });
 });
