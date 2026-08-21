@@ -553,6 +553,11 @@ export class MqttPublisher {
         console.log(`MQTT climate key ${deviceId} ${climateButton.keyName} (${climateButton.key})`);
         await sendAcButton(climateButton.id);
       }
+      if (climateButtons.length === 0) {
+        console.log(
+          `MQTT climate ${deviceId} updated memory only (mode ${nextState.mode ?? 'cool'} ${rememberedAcTemperatureC(nextState)}C ${publishedAcFanMode(nextState)}); Custom has no absolute temp IR`,
+        );
+      }
     } catch (error) {
       console.error(
         `MQTT climate command failed for ${deviceId}: ${

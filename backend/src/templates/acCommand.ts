@@ -32,8 +32,6 @@ const LEARNED_FAN_LABELS: Record<AcFanMode, readonly string[]> = {
   high: ['fan 3', 'fan3'],
 };
 
-const TEMPERATURE_UP_LABELS = ['t', 'temperature', 'temp up', 'temp+'] as const;
-
 const normalizeButtonLabel = (value: string): string => {
   return value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
 };
@@ -178,24 +176,6 @@ export const findCatalogButtonByLabels = ({
   return undefined;
 };
 
-export const countAcTemperatureUpSteps = ({
-  fromC,
-  toC,
-}: {
-  fromC: number;
-  toC: number;
-}): number => {
-  const fromTemperatureC = clampAcTemperatureC(fromC);
-  const toTemperatureC = clampAcTemperatureC(toC);
-  if (fromTemperatureC === toTemperatureC) {
-    return 0;
-  }
-  if (toTemperatureC > fromTemperatureC) {
-    return toTemperatureC - fromTemperatureC;
-  }
-  return AC_MAX_TEMPERATURE_C - fromTemperatureC + (toTemperatureC - AC_MIN_TEMPERATURE_C) + 1;
-};
-
 export const listAcClimateButtonsToSend = ({
   catalog,
   remoteId,
@@ -220,10 +200,6 @@ export const listAcClimateButtonsToSend = ({
   const previousMode = normalizeAcHvacMode(previousState.mode);
   const nextFanMode = normalizeAcFanMode(nextState.fanMode);
   const previousFanMode = normalizeAcFanMode(previousState.fanMode);
-  const nextTemperatureC = clampAcTemperatureC(nextState.temperatureC ?? AC_DEFAULT_TEMPERATURE_C);
-  const previousTemperatureC = clampAcTemperatureC(
-    previousState.temperatureC ?? AC_DEFAULT_TEMPERATURE_C,
-  );
   const learnedMode = findCatalogButtonByLabels({
     catalog,
     remoteId,
@@ -237,11 +213,6 @@ export const listAcClimateButtonsToSend = ({
           remoteId,
           labels: LEARNED_FAN_LABELS[nextFanMode],
         });
-  const temperatureUp = findCatalogButtonByLabels({
-    catalog,
-    remoteId,
-    labels: TEMPERATURE_UP_LABELS,
-  });
 
   if (!learnedMode && !learnedFan) {
     buttons.push(findAcLibraryButton({ catalog, remoteId, state: nextState }));
@@ -254,15 +225,6 @@ export const listAcClimateButtonsToSend = ({
   }
   if ((isTurningOn || previousFanMode !== nextFanMode) && learnedFan) {
     buttons.push(learnedFan);
-  }
-  if (nextMode === 'cool' && temperatureUp) {
-    const stepCount = countAcTemperatureUpSteps({
-      fromC: previousTemperatureC,
-      toC: nextTemperatureC,
-    });
-    for (let stepIndex = 0; stepIndex < stepCount; stepIndex += 1) {
-      buttons.push(temperatureUp);
-    }
   }
 
   return buttons;

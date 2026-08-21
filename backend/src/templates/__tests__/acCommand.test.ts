@@ -6,7 +6,6 @@ import {
   applyAcModeCommand,
   applyAcPowerCommand,
   applyAcTemperatureCommand,
-  countAcTemperatureUpSteps,
   findAcLibraryButton,
   findAcPowerButton,
   listAcClimateButtonsToSend,
@@ -282,16 +281,14 @@ describe('listAcClimateButtonsToSend', () => {
     );
   });
 
-  it('steps temperature up with wrap using the Custom T key', () => {
-    assert.equal(countAcTemperatureUpSteps({ fromC: 24, toC: 23 }), 14);
+  it('does not pulse Custom T to reach a new temperature', () => {
     const buttons = listAcClimateButtonsToSend({
       catalog: catalogWithLearned,
       remoteId: 'lg-custom',
       previousState: coolState({ temperatureC: 24 }),
       nextState: coolState({ temperatureC: 23 }),
     });
-    assert.equal(buttons.length, 14);
-    assert.equal(buttons[0]?.key, 'T');
+    assert.deepEqual(buttons, []);
   });
 
   it('falls back to the library key when no learned climate buttons exist', () => {
