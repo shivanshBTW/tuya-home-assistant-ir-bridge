@@ -59,7 +59,7 @@ Writes gitignored `data/catalog.json` (contains `localKey` and IR payloads — n
 pnpm dev
 ```
 
-- Mapper UI: http://127.0.0.1:5173
+- Mapper UI: http://127.0.0.1:8787 (Docker) or http://127.0.0.1:8788 (`pnpm dev`)
 - API: http://127.0.0.1:8787
 
 In **Settings**, paste `API_TOKEN`, export (or use `pnpm export`), then on **Mapper** assign buttons to Fan speeds 1–6 and LED. Leftover keys stay on **Keypad** and are not sent to Google.
