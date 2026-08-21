@@ -1,41 +1,42 @@
-import { TuyaDevice, discoverDevices } from '@apocaliss92/nodetuya';
+import { TuyaDevice } from '@apocaliss92/nodetuya';
 import { DEFAULT_IR_SEND_DP } from '../constants.js';
 import type { LocalDevice } from '../types.js';
+import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
-const DISCOVERY_TIMEOUT_MS = 4000;
+export const prepareLocalDevice = async ({
+  localDevice,
+  configuredIp,
+  configuredMac,
+}: {
+  localDevice: LocalDevice;
+  configuredIp?: string;
+  configuredMac?: string;
+}): Promise<LocalDevice> => {
+  const resolved = await resolveTuyaLocalHost({
+    configuredIp,
+    configuredMac,
+    fallbackHost: localDevice.host,
+    deviceId: localDevice.id,
+  });
+
+  return probeLocalDevice({
+    ...localDevice,
+    host: resolved.host,
+    version: resolved.discoveredVersion ?? localDevice.version,
+    mac: configuredIp ? undefined : configuredMac,
+  });
+};
 
 export const probeLocalDevice = async (localDevice: LocalDevice): Promise<LocalDevice> => {
-  if (!localDevice.key) {
+  if (!localDevice.key || !localDevice.host) {
     return localDevice;
-  }
-
-  let host = localDevice.host;
-  let version = localDevice.version;
-
-  if (!host) {
-    try {
-      const discovered = await discoverDevices({ timeoutMs: DISCOVERY_TIMEOUT_MS });
-      const match = discovered.find((item) => item.id === localDevice.id);
-      if (match) {
-        host = match.ip ?? host;
-        version = match.version ?? version;
-      }
-    } catch (error) {
-      console.warn(
-        `LAN discovery failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-
-  if (!host) {
-    return { ...localDevice, host, version };
   }
 
   const device = new TuyaDevice({
     id: localDevice.id,
     key: localDevice.key,
-    host,
-    version: version ?? '3.3',
+    host: localDevice.host,
+    version: localDevice.version ?? '3.3',
   });
 
   try {
@@ -49,14 +50,12 @@ export const probeLocalDevice = async (localDevice: LocalDevice): Promise<LocalD
 
     return {
       ...localDevice,
-      host,
-      version,
       irSendDp,
       dps,
     };
   } catch (error) {
     console.warn(`LAN probe failed: ${error instanceof Error ? error.message : String(error)}`);
-    return { ...localDevice, host, version };
+    return localDevice;
   } finally {
     try {
       device.disconnect();

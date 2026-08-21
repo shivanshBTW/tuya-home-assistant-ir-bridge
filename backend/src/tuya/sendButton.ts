@@ -3,6 +3,7 @@ import type { Catalog, CatalogButton, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
 import { sendLocalIrCode } from './localSend.js';
+import { lookupIpByMac } from './lookupIpByMac.js';
 
 const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
   for (const remote of catalog.remotes) {
@@ -29,16 +30,29 @@ export const sendCatalogButton = async ({
     throw new Error(`Unknown remote ${button.remoteId}`);
   }
 
-  if (button.code && catalog.local.key && catalog.local.host) {
-    try {
-      await sendLocalIrCode({ localDevice: catalog.local, code: button.code });
-      return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
-    } catch (error) {
-      console.warn(
-        `Local send failed, will try cloud if configured: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+  if (button.code && catalog.local.key) {
+    let localDevice = catalog.local;
+    if (!localDevice.host && localDevice.mac) {
+      const hostFromMac = await lookupIpByMac({
+        mac: localDevice.mac,
+        shouldScanSubnet: true,
+      });
+      if (hostFromMac) {
+        localDevice = { ...localDevice, host: hostFromMac };
+      }
+    }
+
+    if (localDevice.host) {
+      try {
+        await sendLocalIrCode({ localDevice, code: button.code });
+        return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
+      } catch (error) {
+        console.warn(
+          `Local send failed, will try cloud if configured: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
   }
 

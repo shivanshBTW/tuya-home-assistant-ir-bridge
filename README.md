@@ -35,7 +35,7 @@ Edit `backend/.env`:
 
 - `API_TOKEN` — long random string (required; the example placeholder is rejected)
 - Tuya Cloud: `TUYA_ACCESS_ID`, `TUYA_ACCESS_SECRET`, `TUYA_API_ENDPOINT`, `TUYA_IR_DEVICE_ID`
-- LAN: `TUYA_LOCAL_IP`, `TUYA_LOCAL_KEY` if not fetched during export
+- LAN: `TUYA_LOCAL_IP` if you know it; otherwise `TUYA_LOCAL_MAC` to find the IP on the LAN; `TUYA_LOCAL_KEY` if not fetched during export
 - `MQTT_URL` if Home Assistant should auto-create entities
 
 Tuya OpenAPI regions (no project id in this repo):

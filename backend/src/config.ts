@@ -8,6 +8,7 @@ import {
   DEFAULT_TUYA_LOCAL_VERSION,
   PLACEHOLDER_API_TOKEN,
 } from './constants.js';
+import { formatMacAddress } from './tuya/macAddress.js';
 
 const backendDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(backendDir, '../..');
@@ -41,6 +42,7 @@ export interface AppConfig {
   tuyaApiEndpoint: string | undefined;
   tuyaIrDeviceId: string | undefined;
   tuyaLocalIp: string | undefined;
+  tuyaLocalMac: string | undefined;
   tuyaLocalKey: string | undefined;
   tuyaLocalVersion: string;
   mqttUrl: string | undefined;
@@ -73,6 +75,7 @@ export const loadConfig = (): AppConfig => {
     tuyaApiEndpoint: readEnv('TUYA_API_ENDPOINT'),
     tuyaIrDeviceId: readEnv('TUYA_IR_DEVICE_ID'),
     tuyaLocalIp: readEnv('TUYA_LOCAL_IP'),
+    tuyaLocalMac: readMacEnv('TUYA_LOCAL_MAC'),
     tuyaLocalKey: readEnv('TUYA_LOCAL_KEY'),
     tuyaLocalVersion: readEnv('TUYA_LOCAL_VERSION') ?? DEFAULT_TUYA_LOCAL_VERSION,
     mqttUrl: readEnv('MQTT_URL'),
@@ -96,4 +99,12 @@ const readRequiredFrom = (value: string | undefined, name: string): string => {
     throw new Error(`Missing required environment variable ${name}`);
   }
   return value;
+};
+
+const readMacEnv = (name: string): string | undefined => {
+  const value = readEnv(name);
+  if (!value) {
+    return undefined;
+  }
+  return formatMacAddress(value);
 };

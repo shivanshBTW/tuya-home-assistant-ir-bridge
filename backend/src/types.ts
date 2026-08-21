@@ -6,6 +6,7 @@ export interface LocalDevice {
   id: string;
   key?: string;
   host?: string;
+  mac?: string;
   version?: string;
   irSendDp?: string;
   dps?: Record<string, unknown>;

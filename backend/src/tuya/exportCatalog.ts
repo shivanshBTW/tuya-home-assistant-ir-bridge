@@ -194,6 +194,7 @@ export const exportCatalog = async ({
     id: deviceDetail.id ?? infraredId,
     key: localOverrides.key ?? deviceDetail.local_key,
     host: localOverrides.host ?? deviceDetail.ip,
+    mac: localOverrides.mac,
     version: localOverrides.version,
     irSendDp: localOverrides.irSendDp,
     dps: localOverrides.dps,

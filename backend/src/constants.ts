@@ -5,6 +5,7 @@ export const DEFAULT_PORT = 8787;
 export const DEFAULT_MQTT_DISCOVERY_PREFIX = 'homeassistant';
 export const DEFAULT_TUYA_LOCAL_VERSION = '3.3';
 export const DEFAULT_IR_SEND_DP = '201';
+export const TUYA_DISCOVERY_TIMEOUT_MS = 4000;
 
 export const RATE_LIMIT_DELAY_MS = 250;
 

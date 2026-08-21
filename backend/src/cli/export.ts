@@ -4,7 +4,7 @@ import { loadConfig, requireTuyaCloudConfig } from '../config.js';
 import { JsonStore } from '../store/jsonStore.js';
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
-import { probeLocalDevice } from '../tuya/localSend.js';
+import { prepareLocalDevice } from '../tuya/localSend.js';
 
 const runExport = async () => {
   const appConfig = loadConfig();
@@ -24,12 +24,17 @@ const runExport = async () => {
       id: tuyaConfig.irDeviceId,
       key: appConfig.tuyaLocalKey,
       host: appConfig.tuyaLocalIp,
+      mac: appConfig.tuyaLocalMac,
       version: appConfig.tuyaLocalVersion,
     },
   });
   catalog = {
     ...catalog,
-    local: await probeLocalDevice(catalog.local),
+    local: await prepareLocalDevice({
+      localDevice: catalog.local,
+      configuredIp: appConfig.tuyaLocalIp,
+      configuredMac: appConfig.tuyaLocalMac,
+    }),
   };
 
   const jsonStore = new JsonStore(appConfig.dataDir);

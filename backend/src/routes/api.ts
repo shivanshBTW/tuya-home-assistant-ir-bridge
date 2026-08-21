@@ -5,7 +5,7 @@ import type { JsonStore } from '../store/jsonStore.js';
 import { DEVICE_TEMPLATES, getTemplateById } from '../templates/deviceTemplates.js';
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
-import { probeLocalDevice } from '../tuya/localSend.js';
+import { prepareLocalDevice } from '../tuya/localSend.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
 import type {
   ClimateAssumedState,
@@ -103,12 +103,17 @@ export const registerRoutes = ({
         id: tuyaConfig.irDeviceId,
         key: appConfig.tuyaLocalKey,
         host: appConfig.tuyaLocalIp,
+        mac: appConfig.tuyaLocalMac,
         version: appConfig.tuyaLocalVersion,
       },
     });
     catalog = {
       ...catalog,
-      local: await probeLocalDevice(catalog.local),
+      local: await prepareLocalDevice({
+        localDevice: catalog.local,
+        configuredIp: appConfig.tuyaLocalIp,
+        configuredMac: appConfig.tuyaLocalMac,
+      }),
     };
     await jsonStore.writeCatalog(catalog);
     return { catalog: await redactCatalog(catalog) };
