@@ -150,6 +150,8 @@ export const registerRoutes = ({
       catalog,
       buttonId: decodeURIComponent(buttonId),
       cloudClient: optionalCloudClient(),
+      configuredIp: appConfig.tuyaLocalIp,
+      configuredMac: appConfig.tuyaLocalMac,
     });
     return result;
   });

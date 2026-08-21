@@ -1,5 +1,6 @@
 import { discoverDevices } from '@apocaliss92/nodetuya';
 import { TUYA_DISCOVERY_TIMEOUT_MS } from '../constants.js';
+import { isLanIpv4 } from './lanAddress.js';
 import { lookupIpByMac } from './lookupIpByMac.js';
 
 export interface ResolvedLocalHost {
@@ -11,7 +12,7 @@ export const discoverHostByDeviceId = async (deviceId: string): Promise<Resolved
   try {
     const discovered = await discoverDevices({ timeoutMs: TUYA_DISCOVERY_TIMEOUT_MS });
     const match = discovered.find((item) => item.id === deviceId);
-    if (!match) {
+    if (!match || !isLanIpv4(match.ip)) {
       return {};
     }
     return { host: match.ip, discoveredVersion: match.version };
@@ -39,7 +40,10 @@ export const resolveTuyaLocalHost = async ({
   shouldScanSubnet?: boolean;
 }): Promise<ResolvedLocalHost> => {
   if (configuredIp) {
-    return { host: configuredIp };
+    if (isLanIpv4(configuredIp)) {
+      return { host: configuredIp };
+    }
+    console.warn(`Ignoring TUYA_LOCAL_IP ${configuredIp}; it is not a LAN address`);
   }
 
   if (configuredMac) {
@@ -49,14 +53,17 @@ export const resolveTuyaLocalHost = async ({
         console.log(`Resolved TUYA_LOCAL_MAC to ${hostFromMac}`);
         return { host: hostFromMac };
       }
-      console.warn('No LAN IP found for TUYA_LOCAL_MAC; using discovery or cloud IP');
+      console.warn('No LAN IP found for TUYA_LOCAL_MAC; using discovery or a LAN catalog host');
     } catch (error) {
       console.warn(`MAC lookup failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  if (fallbackHost) {
+  if (fallbackHost && isLanIpv4(fallbackHost)) {
     return { host: fallbackHost };
+  }
+  if (fallbackHost) {
+    console.warn(`Ignoring catalog host ${fallbackHost}; it is not a LAN address`);
   }
 
   if (!shouldScanSubnet) {

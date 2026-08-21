@@ -433,6 +433,8 @@ export class MqttPublisher {
         catalog,
         buttonId: slot.buttonId,
         cloudClient: this.getCloudClient(),
+        configuredIp: this.appConfig.tuyaLocalIp,
+        configuredMac: this.appConfig.tuyaLocalMac,
       });
     };
 
@@ -496,6 +498,8 @@ export class MqttPublisher {
             catalog,
             buttonId,
             cloudClient: this.getCloudClient(),
+            configuredIp: this.appConfig.tuyaLocalIp,
+            configuredMac: this.appConfig.tuyaLocalMac,
           });
         };
         const sendAcClimate = async (nextState: ClimateAssumedState) => {

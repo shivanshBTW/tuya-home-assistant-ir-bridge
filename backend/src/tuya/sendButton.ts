@@ -3,7 +3,7 @@ import type { Catalog, CatalogButton, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
 import { sendLocalIrCode } from './localSend.js';
-import { lookupIpByMac } from './lookupIpByMac.js';
+import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
 const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
   for (const remote of catalog.remotes) {
@@ -19,10 +19,14 @@ export const sendCatalogButton = async ({
   catalog,
   buttonId,
   cloudClient,
+  configuredIp,
+  configuredMac,
 }: {
   catalog: Catalog;
   buttonId: string;
   cloudClient?: TuyaCloudClient;
+  configuredIp?: string;
+  configuredMac?: string;
 }): Promise<SendResult> => {
   const button = findButton(catalog, buttonId);
   const remote = catalog.remotes.find((item) => item.remoteId === button.remoteId);
@@ -31,16 +35,18 @@ export const sendCatalogButton = async ({
   }
 
   if (button.code && catalog.local.key) {
-    let localDevice = catalog.local;
-    if (!localDevice.host && localDevice.mac) {
-      const hostFromMac = await lookupIpByMac({
-        mac: localDevice.mac,
-        shouldScanSubnet: true,
-      });
-      if (hostFromMac) {
-        localDevice = { ...localDevice, host: hostFromMac };
-      }
-    }
+    const resolved = await resolveTuyaLocalHost({
+      configuredIp,
+      configuredMac: configuredMac ?? catalog.local.mac,
+      fallbackHost: catalog.local.host,
+      deviceId: catalog.local.id,
+      shouldScanSubnet: true,
+    });
+    const localDevice = {
+      ...catalog.local,
+      host: resolved.host,
+      version: resolved.discoveredVersion ?? catalog.local.version,
+    };
 
     if (localDevice.host) {
       try {
