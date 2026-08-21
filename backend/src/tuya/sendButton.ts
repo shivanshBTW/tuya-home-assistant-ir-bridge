@@ -38,7 +38,8 @@ export const sendCatalogButton = async ({
     throw new Error(`Unknown remote ${button.remoteId}`);
   }
 
-  if (shouldSendCatalogButtonLocally(button) && catalog.local.key) {
+  const irCode = button.code;
+  if (irCode && shouldSendCatalogButtonLocally(button) && catalog.local.key) {
     const resolved = await resolveTuyaLocalHost({
       configuredIp,
       configuredMac: configuredMac ?? catalog.local.mac,
@@ -54,7 +55,7 @@ export const sendCatalogButton = async ({
 
     if (localDevice.host) {
       try {
-        await sendLocalIrCode({ localDevice, code: button.code });
+        await sendLocalIrCode({ localDevice, code: irCode });
         return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
       } catch (error) {
         console.warn(
