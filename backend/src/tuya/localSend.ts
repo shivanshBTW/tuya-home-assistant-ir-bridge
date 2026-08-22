@@ -1,6 +1,7 @@
 import { TuyaDevice } from '@apocaliss92/nodetuya';
 import { DEFAULT_IR_SEND_DP } from '../constants.js';
 import type { LocalDevice } from '../types.js';
+import type { LocalIrFrame } from './irFrame.js';
 import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
 export const prepareLocalDevice = async ({
@@ -67,10 +68,10 @@ export const probeLocalDevice = async (localDevice: LocalDevice): Promise<LocalD
 
 export const sendLocalIrCode = async ({
   localDevice,
-  code,
+  frame,
 }: {
   localDevice: LocalDevice;
-  code: string;
+  frame: LocalIrFrame;
 }): Promise<void> => {
   if (!localDevice.key || !localDevice.host) {
     throw new Error('Local Tuya host or key is missing');
@@ -86,8 +87,8 @@ export const sendLocalIrCode = async ({
 
   const payload = JSON.stringify({
     control: 'send_ir',
-    head: '',
-    key1: `1${code}`,
+    head: frame.head,
+    key1: frame.key1,
     type: 0,
     delay: 300,
   });

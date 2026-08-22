@@ -2,6 +2,7 @@ import { SEND_PATH_CLOUD, SEND_PATH_LOCAL } from '../constants.js';
 import type { Catalog, CatalogButton, LocalDevice, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
+import { catalogCodeToLocalIrFrame, classifyCatalogIrCode } from './irFrame.js';
 import { sendLocalIrCode } from './localSend.js';
 import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
@@ -16,7 +17,7 @@ const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
 };
 
 export const shouldSendCatalogButtonLocally = (button: CatalogButton): boolean => {
-  return Boolean(button.code) && button.source === 'learned';
+  return Boolean(button.code);
 };
 
 let cachedLocalTarget:
@@ -110,8 +111,13 @@ export const sendCatalogButton = async ({
       return undefined;
     }
     try {
-      await sendLocalIrCode({ localDevice, code: irCode });
-      console.log(`Local IR sent to ${localDevice.host} for ${button.keyName}`);
+      await sendLocalIrCode({
+        localDevice,
+        frame: catalogCodeToLocalIrFrame(irCode),
+      });
+      console.log(
+        `Local IR sent to ${localDevice.host} for ${button.keyName} (${classifyCatalogIrCode(irCode)})`,
+      );
       return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
     } catch (error) {
       cachedLocalTarget = undefined;

@@ -27,7 +27,7 @@ describe('shouldSendCatalogButtonLocally', () => {
     );
   });
 
-  it('does not send Tuya library frames locally', () => {
+  it('sends Tuya library frames locally when a code exists', () => {
     assert.equal(
       shouldSendCatalogButtonLocally(
         button({
@@ -36,11 +36,11 @@ describe('shouldSendCatalogButtonLocally', () => {
           code: '+kLibraryCode',
         }),
       ),
-      false,
+      true,
     );
   });
 
-  it('does not send Tuya key-source catalog frames locally', () => {
+  it('sends Tuya key-source catalog frames locally when a code exists', () => {
     assert.equal(
       shouldSendCatalogButtonLocally(
         button({
@@ -49,7 +49,11 @@ describe('shouldSendCatalogButtonLocally', () => {
           code: 'vFCatalogCode',
         }),
       ),
-      false,
+      true,
     );
+  });
+
+  it('does not send locally when the button has no code', () => {
+    assert.equal(shouldSendCatalogButtonLocally(button({ code: undefined })), false);
   });
 });
