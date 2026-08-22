@@ -2,7 +2,7 @@ import { SEND_PATH_CLOUD, SEND_PATH_LOCAL } from '../constants.js';
 import type { Catalog, CatalogButton, LocalDevice, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
-import { probeLocalDevice, sendLocalIrCode } from './localSend.js';
+import { sendLocalIrCode } from './localSend.js';
 import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
 const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
@@ -16,7 +16,7 @@ const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
 };
 
 export const shouldSendCatalogButtonLocally = (button: CatalogButton): boolean => {
-  return Boolean(button.code) && !button.id.includes(':library:');
+  return Boolean(button.code) && button.source === 'learned';
 };
 
 let cachedLocalTarget:
@@ -89,17 +89,15 @@ export const sendCatalogButton = async ({
       return undefined;
     }
 
-    const probed = await probeLocalDevice({
+    cachedLocalTarget = {
+      host: resolved.host,
+      version: resolved.discoveredVersion,
+    };
+    return {
       ...catalog.local,
       host: resolved.host,
       version: resolved.discoveredVersion ?? catalog.local.version,
-    });
-    cachedLocalTarget = {
-      host: probed.host ?? resolved.host,
-      version: probed.version,
-      irSendDp: probed.irSendDp,
     };
-    return probed;
   };
 
   const sendViaLocal = async (): Promise<SendResult | undefined> => {

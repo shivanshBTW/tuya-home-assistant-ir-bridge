@@ -10,6 +10,7 @@ import {
   listMappedTvButtonSlots,
   listSoundbarButtonSlots,
   listTvButtonSlots,
+  resolveMappedFanSpeedSlotId,
 } from '../deviceTemplates.js';
 
 describe('TV template slots', () => {
@@ -116,6 +117,31 @@ describe('Soundbar template slots', () => {
     assert.deepEqual(
       mapped.map((slot) => slot.id),
       ['input', 'equalize'],
+    );
+  });
+});
+
+describe('Fan speed slots', () => {
+  it('uses the highest mapped speed when HA asks for an unmapped speed 6', () => {
+    assert.equal(
+      resolveMappedFanSpeedSlotId({
+        slots: {
+          speed_1: { buttonId: 's1' },
+          speed_5: { buttonId: 's5' },
+        },
+        speed: 6,
+      }),
+      'speed_5',
+    );
+  });
+
+  it('uses a mapped max slot when no speed keys exist', () => {
+    assert.equal(
+      resolveMappedFanSpeedSlotId({
+        slots: { max: { buttonId: 'boost' } },
+        speed: 6,
+      }),
+      'max',
     );
   });
 });

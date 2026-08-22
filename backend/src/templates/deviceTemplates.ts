@@ -2,6 +2,26 @@ import type { DeviceMapping, DeviceTemplate, SlotDefinition } from '../types.js'
 
 export const FAN_SPEED_COUNT = 6;
 
+export const resolveMappedFanSpeedSlotId = ({
+  slots,
+  speed,
+}: {
+  slots: DeviceMapping['slots'];
+  speed: number;
+}): string => {
+  const requestedSpeed = Math.min(FAN_SPEED_COUNT, Math.max(1, Math.round(speed)));
+  for (let speedNumber = requestedSpeed; speedNumber >= 1; speedNumber -= 1) {
+    const slotId = `speed_${speedNumber}`;
+    if (slots[slotId]) {
+      return slotId;
+    }
+  }
+  if (slots.max) {
+    return 'max';
+  }
+  throw new Error(`Slot speed_${requestedSpeed} is not mapped`);
+};
+
 const TV_MEDIA_PLAYER_SLOT_IDS = new Set([
   'power',
   'vol_up',

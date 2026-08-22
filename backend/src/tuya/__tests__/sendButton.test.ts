@@ -39,4 +39,17 @@ describe('shouldSendCatalogButtonLocally', () => {
       false,
     );
   });
+
+  it('does not send Tuya key-source catalog frames locally', () => {
+    assert.equal(
+      shouldSendCatalogButtonLocally(
+        button({
+          id: 'remote:key:power:1',
+          source: 'key',
+          code: 'vFCatalogCode',
+        }),
+      ),
+      false,
+    );
+  });
 });

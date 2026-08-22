@@ -2,6 +2,7 @@ import mqtt from 'mqtt';
 import type { AppConfig } from '../config.js';
 import {
   FAN_SPEED_COUNT,
+  resolveMappedFanSpeedSlotId,
   TV_HDMI_SOURCE_NAME,
   AC_POWER_SAVING_OPTION_BY_SLOT_ID,
   AC_POWER_SAVING_SLOT_IDS,
@@ -117,6 +118,7 @@ export class MqttPublisher {
         });
         return;
       }
+      console.log(`MQTT command ${deviceId} ${messageTopic} ${payload.toString()}`);
       void this.enqueueDeviceCommand({
         deviceId,
         run: () => this.handleCommand({ messageTopic, payload: payload.toString() }),
@@ -195,7 +197,6 @@ export class MqttPublisher {
     const base = [BRIDGE_ID, device.id];
 
     if (device.template === 'fan') {
-      const fanState = asFanState(device.assumedState);
       const commandTopic = topic(prefix, [...base, 'fan', 'set']);
       const percentageCommandTopic = topic(prefix, [...base, 'fan', 'percentage', 'set']);
       await this.client.publish(
@@ -217,18 +218,7 @@ export class MqttPublisher {
       );
       await this.client.subscribe(commandTopic);
       await this.client.subscribe(percentageCommandTopic);
-      await this.client.publish(
-        topic(prefix, [...base, 'fan', 'state']),
-        fanState.isOn ? 'ON' : 'OFF',
-        {
-          retain: true,
-        },
-      );
-      await this.client.publish(
-        topic(prefix, [...base, 'fan', 'percentage']),
-        String(fanState.speed),
-        { retain: true },
-      );
+      await this.publishFanState(device);
 
       if (device.slots.led) {
         const ledCommandTopic = topic(prefix, [...base, 'led', 'set']);
@@ -246,11 +236,6 @@ export class MqttPublisher {
           { retain: true },
         );
         await this.client.subscribe(ledCommandTopic);
-        await this.client.publish(
-          topic(prefix, [...base, 'led', 'state']),
-          fanState.isLedOn ? 'ON' : 'OFF',
-          { retain: true },
-        );
       }
       return;
     }
@@ -352,6 +337,32 @@ export class MqttPublisher {
     await this.client.subscribe(fanModeCommandTopic);
     await this.publishClimateState(device);
     await this.publishAcExtraEntities(device);
+  }
+
+  private async publishFanState(device: DeviceMapping): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+    const prefix = this.appConfig.mqttDiscoveryPrefix;
+    const base = [BRIDGE_ID, device.id];
+    const fanState = asFanState(device.assumedState);
+    await this.client.publish(
+      topic(prefix, [...base, 'fan', 'state']),
+      fanState.isOn ? 'ON' : 'OFF',
+      { retain: true },
+    );
+    await this.client.publish(
+      topic(prefix, [...base, 'fan', 'percentage']),
+      String(fanState.speed),
+      { retain: true },
+    );
+    if (device.slots.led) {
+      await this.client.publish(
+        topic(prefix, [...base, 'led', 'state']),
+        fanState.isLedOn ? 'ON' : 'OFF',
+        { retain: true },
+      );
+    }
   }
 
   private async publishClimateState(device: DeviceMapping): Promise<void> {
@@ -619,6 +630,7 @@ export class MqttPublisher {
     const catalog = await this.jsonStore.readCatalog();
     const mapping = await this.jsonStore.readMapping();
     if (!catalog) {
+      console.warn(`MQTT command ignored for ${messageTopic}: no catalog`);
       return;
     }
 
@@ -626,6 +638,7 @@ export class MqttPublisher {
     const deviceId = parts[2];
     const device = mapping.devices.find((item) => item.id === deviceId);
     if (!device) {
+      console.warn(`MQTT command ignored for ${messageTopic}: unknown device ${deviceId}`);
       return;
     }
 
@@ -634,13 +647,16 @@ export class MqttPublisher {
       if (!slot) {
         throw new Error(`Slot ${slotId} is not mapped on ${device.name}`);
       }
-      await sendCatalogButton({
+      const sendResult = await sendCatalogButton({
         catalog,
         buttonId: slot.buttonId,
         cloudClient: this.getCloudClient(),
         configuredIp: this.appConfig.tuyaLocalIp,
         configuredMac: this.appConfig.tuyaLocalMac,
       });
+      console.log(
+        `MQTT sent ${device.name} ${slotId} via ${sendResult.path} remote ${sendResult.remoteId}`,
+      );
     };
 
     try {
@@ -648,12 +664,21 @@ export class MqttPublisher {
         const fanState = asFanState(device.assumedState);
         if (messageTopic.endsWith('/fan/set')) {
           fanState.isOn = payload === 'ON';
+          console.log(`MQTT fan ${deviceId} power ${payload}`);
           await sendSlot('power');
         } else if (messageTopic.endsWith('/fan/percentage/set')) {
-          const speed = Math.min(FAN_SPEED_COUNT, Math.max(1, Number(payload)));
+          const requestedSpeed = Number(payload);
+          const speed = Number.isFinite(requestedSpeed)
+            ? Math.min(FAN_SPEED_COUNT, Math.max(1, Math.round(requestedSpeed)))
+            : 1;
+          const speedSlotId = resolveMappedFanSpeedSlotId({
+            slots: device.slots,
+            speed,
+          });
           fanState.isOn = true;
           fanState.speed = speed;
-          await sendSlot(`speed_${speed}`);
+          console.log(`MQTT fan ${deviceId} speed ${speed} slot ${speedSlotId}`);
+          await sendSlot(speedSlotId);
         } else if (messageTopic.endsWith('/led/set')) {
           fanState.isLedOn = payload === 'ON';
           await sendSlot('led');
@@ -724,6 +749,8 @@ export class MqttPublisher {
       await this.jsonStore.writeMapping(nextMapping);
       if (device.template === 'ac') {
         await this.publishClimateState(device);
+      } else if (device.template === 'fan') {
+        await this.publishFanState(device);
       } else {
         await this.publishDevice(device);
       }
