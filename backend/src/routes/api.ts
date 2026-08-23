@@ -7,7 +7,14 @@ import { DEVICE_TEMPLATES, getTemplateById } from '../templates/deviceTemplates.
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
 import { listCatalogRemoteBits } from '../tuya/catalogRemoteBits.js';
-import { compareIrBits, compareIrPulses, decodeIrCode } from '../tuya/irDecode.js';
+import {
+  bitsToPulses,
+  compareIrBits,
+  compareIrPulses,
+  decodeIrCode,
+  parseIrBitString,
+  pulsesToHex,
+} from '../tuya/irDecode.js';
 import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
 import { listenForLocalIrCode } from '../tuya/localStudy.js';
@@ -336,6 +343,31 @@ export const registerRoutes = ({
     });
     console.log(`Study replayed ${capture.id} to ${localDevice.host}`);
     return { path: SEND_PATH_LOCAL, captureId: capture.id };
+  });
+
+  app.post('/api/study/fire-bits', async (request) => {
+    if (isStudyListenInProgress) {
+      throw new Error('Wait for study listen to finish before firing bits');
+    }
+    const body = request.body as { bits?: string };
+    if (typeof body.bits !== 'string') {
+      throw new Error('bits is required');
+    }
+    const compactBits = parseIrBitString(body.bits);
+    const pulses = bitsToPulses(compactBits);
+    const localDevice = await requireLocalBlaster();
+    await sendLocalIrCode({
+      localDevice,
+      frame: catalogCodeToLocalIrFrame(pulsesToHex(pulses)),
+    });
+    console.log(
+      `Study fired ${compactBits.length} bits (${pulses.length} pulses) to ${localDevice.host}`,
+    );
+    return {
+      path: SEND_PATH_LOCAL,
+      bitCount: compactBits.length,
+      pulseCount: pulses.length,
+    };
   });
 
   app.get('/api/study/diff', async (request) => {

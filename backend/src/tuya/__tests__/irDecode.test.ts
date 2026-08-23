@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   base64ToPulses,
+  bitsToPulses,
   compareIrBits,
   compareIrPulses,
   decodeIrCode,
   hexToPulses,
+  parseIrBitString,
   pulsesToBase64,
   pulsesToBits,
   pulsesToHex,
@@ -92,5 +94,17 @@ describe('pulsesToBits', () => {
       { index: 26, left: '0', right: '1' },
       { index: 27, left: '0', right: '1' },
     ]);
+  });
+});
+
+describe('bitsToPulses', () => {
+  it('round-trips the 27C LG bit string', () => {
+    const cool27Bits = '1000100000001000110001001000';
+    assert.equal(pulsesToBits(bitsToPulses(cool27Bits)), cool27Bits);
+    assert.equal(parseIrBitString('1000 1000 0000 1000 1100 0100 1000'), cool27Bits);
+  });
+
+  it('rejects non-bit characters', () => {
+    assert.throws(() => bitsToPulses('1002'), /bits must be a 0\/1 string/);
   });
 });

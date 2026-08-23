@@ -5,6 +5,13 @@ const LEARNED_KEY1_PREFIX = '1';
 export const IR_LONG_MIN_US = 1000;
 export const IR_HEADER_MIN_US = 2000;
 export const IR_TRAILER_MIN_US = 8000;
+export const IR_LG_HEADER_MARK_US = 3063;
+export const IR_LG_HEADER_SPACE_US = 9841;
+export const IR_LG_SHORT_US = 512;
+export const IR_LG_LONG_US = 1576;
+export const IR_LG_TRAILER_US = 30_000;
+const IR_BIT_WHITESPACE_PATTERN = /[\s]+/g;
+const IR_BIT_PATTERN = /^[01]+$/;
 
 export type IrPulseSymbol = 'S' | 'L' | 'M' | 'H';
 
@@ -53,6 +60,24 @@ export const pulsesToBits = (pulses: number[]): string => {
     pulseIndex += 1;
   }
   return bits.join('');
+};
+
+export const parseIrBitString = (bits: string): string => {
+  const compactBits = bits.replace(IR_BIT_WHITESPACE_PATTERN, '');
+  if (!IR_BIT_PATTERN.test(compactBits)) {
+    throw new Error('bits must be a 0/1 string');
+  }
+  return compactBits;
+};
+
+export const bitsToPulses = (bits: string): number[] => {
+  const compactBits = parseIrBitString(bits);
+  const pulses = [IR_LG_HEADER_MARK_US, IR_LG_HEADER_SPACE_US];
+  for (const bit of compactBits) {
+    pulses.push(IR_LG_SHORT_US, bit === '1' ? IR_LG_LONG_US : IR_LG_SHORT_US);
+  }
+  pulses.push(IR_LG_TRAILER_US);
+  return pulses;
 };
 
 const decodeFromPulses = ({
