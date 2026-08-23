@@ -182,4 +182,41 @@ describe('inferTrainerFields', () => {
     );
     assert.equal(constantNote?.role, 'constant');
   });
+
+  it('treats cool vs dry as a mode pair even when dry has no speed label', () => {
+    const schema = createDefaultAcTrainerSchema();
+    const cool = `1000100000001000100101000000`;
+    const dry = `1000100010001000100101000001`;
+    const coolHigh = `1000100000001000100110001100`;
+    const inference = inferTrainerFields({
+      schema,
+      samples: [
+        sample({
+          id: 'cool',
+          receivedAt: '2026-01-01T00:00:00.000Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+          bits: cool,
+        }),
+        sample({
+          id: 'coolh',
+          receivedAt: '2026-01-01T00:00:01.000Z',
+          unlockedParamId: 'speed',
+          paramValues: { mode: 'cool', temp: '24', speed: 'high', powerSaving: 'off' },
+          bits: coolHigh,
+        }),
+        sample({
+          id: 'dry',
+          receivedAt: '2026-01-01T00:00:02.000Z',
+          unlockedParamId: 'mode',
+          paramValues: { mode: 'dry', temp: '24', powerSaving: 'off' },
+          bits: dry,
+        }),
+      ],
+    });
+    const modeField = inference.fields.find((field) => field.paramId === 'mode');
+    assert.equal(modeField?.kind, 'lookup');
+    assert.ok(modeField?.bitIndexes.includes(8));
+    assert.notEqual(modeField?.lookup.cool, modeField?.lookup.dry);
+  });
 });

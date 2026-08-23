@@ -18,8 +18,20 @@ const listChangedParamIds = ({
   left: Record<string, string>;
   right: Record<string, string>;
 }): string[] => {
-  const paramIds = new Set([...Object.keys(left), ...Object.keys(right)]);
-  return [...paramIds].filter((paramId) => left[paramId] !== right[paramId]);
+  const sharedParamIds = Object.keys(left).filter((paramId) => right[paramId] !== undefined);
+  return sharedParamIds.filter((paramId) => left[paramId] !== right[paramId]);
+};
+
+const hasSameParamKeys = ({
+  left,
+  right,
+}: {
+  left: Record<string, string>;
+  right: Record<string, string>;
+}): boolean => {
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index]);
 };
 
 const intersectSets = (sets: Set<number>[]): Set<number> => {
@@ -147,7 +159,24 @@ export const inferTrainerFields = ({
 }): TrainerInference => {
   const usableSamples = samples.filter((sample) => sample.bits && !sample.bits.includes('?'));
   const flipsByParamId: Record<string, Set<number>> = {};
+  const leftoverFlipsByParamId: Record<string, Set<number>> = {};
   const unresolved: string[] = [];
+
+  const addFlips = ({
+    paramId,
+    bitDiffs,
+    target,
+  }: {
+    paramId: string;
+    bitDiffs: { index: number }[];
+    target: Record<string, Set<number>>;
+  }): void => {
+    const flipSet = target[paramId] ?? new Set<number>();
+    for (const diff of bitDiffs) {
+      flipSet.add(diff.index);
+    }
+    target[paramId] = flipSet;
+  };
 
   for (let leftIndex = 0; leftIndex < usableSamples.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < usableSamples.length; rightIndex += 1) {
@@ -168,28 +197,45 @@ export const inferTrainerFields = ({
         continue;
       }
       const bitDiffs = compareIrBits({ left: leftSample.bits, right: rightSample.bits });
-      const flipSet = flipsByParamId[paramId] ?? new Set<number>();
-      for (const diff of bitDiffs) {
-        flipSet.add(diff.index);
+      if (hasSameParamKeys({ left: leftSample.paramValues, right: rightSample.paramValues })) {
+        addFlips({ paramId, bitDiffs, target: flipsByParamId });
+        continue;
       }
-      flipsByParamId[paramId] = flipSet;
+      if (paramId === schema.primaryParamId) {
+        addFlips({ paramId, bitDiffs, target: leftoverFlipsByParamId });
+      }
     }
   }
 
   const axisFlipSets = Object.values(flipsByParamId).filter((flipSet) => flipSet.size > 0);
-  const checksumIndexes = [
-    ...(axisFlipSets.length >= 2 ? intersectSets(axisFlipSets) : new Set<number>()),
-  ].sort((left, right) => left - right);
-  const checksumSet = new Set(checksumIndexes);
+  const checksumSet = axisFlipSets.length >= 2 ? intersectSets(axisFlipSets) : new Set<number>();
+  const knownFieldBits = new Set<number>(checksumSet);
+  for (const flipSet of Object.values(flipsByParamId)) {
+    for (const bitIndex of flipSet) {
+      if (!checksumSet.has(bitIndex)) {
+        knownFieldBits.add(bitIndex);
+      }
+    }
+  }
+  const modeFlipSet = leftoverFlipsByParamId[schema.primaryParamId] ?? new Set<number>();
+  const modeUnique = new Set(
+    [...modeFlipSet].filter((bitIndex) => !knownFieldBits.has(bitIndex)),
+  );
+  if (modeUnique.size > 0) {
+    flipsByParamId[schema.primaryParamId] = new Set([
+      ...(flipsByParamId[schema.primaryParamId] ?? []),
+      ...modeUnique,
+    ]);
+  }
 
   const fields: TrainerParamField[] = schema.params.map((param) => {
     const rawIndexes = [...(flipsByParamId[param.id] ?? [])].sort((left, right) => left - right);
     const bitIndexes = rawIndexes.filter((index) => !checksumSet.has(index));
+    const hasAxisPairs = (flipsByParamId[param.id]?.size ?? 0) > 0;
     if (bitIndexes.length === 0) {
-      const reason =
-        usableSamples.filter((sample) => sample.paramValues[param.id] !== undefined).length < 2
-          ? 'Need at least two labeled frames for this param'
-          : 'No unique bits after removing checksum';
+      const reason = hasAxisPairs
+        ? 'No unique bits after removing checksum'
+        : 'No pair that changes only this param';
       unresolved.push(`${param.id}: ${reason}`);
       return {
         paramId: param.id,
@@ -214,6 +260,7 @@ export const inferTrainerFields = ({
       lookup,
     };
   });
+  const checksumIndexes = [...checksumSet].sort((left, right) => left - right);
 
   const disabledNotes: TrainerDisabledNote[] = [];
   const primaryParam = schema.params.find((param) => param.id === schema.primaryParamId);
