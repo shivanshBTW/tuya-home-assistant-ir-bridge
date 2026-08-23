@@ -170,6 +170,15 @@ describe('generateTrainerGrid', () => {
       ).length,
       0,
     );
-    assert.equal(generation.cells.filter((cell) => cell.kind === 'command').length, 4);
+    assert.equal(
+      generation.cells.filter((cell) => cell.kind === 'command' && cell.paramValues.powerSaving)
+        .length,
+      4,
+    );
+    const powerOff = generation.cells.find(
+      (cell) => cell.kind === 'command' && cell.paramValues.power === 'off',
+    );
+    assert.equal(powerOff?.status, 'needs_input');
+    assert.equal(generation.cells.filter((cell) => cell.kind === 'command').length, 5);
   });
 });

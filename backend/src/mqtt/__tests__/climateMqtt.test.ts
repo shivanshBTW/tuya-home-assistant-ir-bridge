@@ -92,6 +92,33 @@ describe('applyClimateMqttBurst', () => {
     assert.equal(afterTemp.temperatureC, 22);
   });
 
+  it('applies Google temp+fan+mode together when shouldApplyAllFields is true', () => {
+    const nextState = applyClimateMqttBurst({
+      state: memoryState(),
+      commands: [
+        { kind: 'fan_mode', payload: 'high' },
+        { kind: 'temperature', payload: '26' },
+        { kind: 'mode', payload: 'cool' },
+      ],
+      shouldApplyAllFields: true,
+    });
+
+    assert.equal(nextState.temperatureC, 26);
+    assert.equal(nextState.fanMode, 'high');
+    assert.equal(nextState.mode, 'cool');
+  });
+
+  it('applies dry temperature when shouldApplyAllFields is true', () => {
+    const nextState = applyClimateMqttBurst({
+      state: memoryState({ mode: 'dry' }),
+      commands: [{ kind: 'temperature', payload: '22' }],
+      shouldApplyAllFields: true,
+    });
+
+    assert.equal(nextState.mode, 'dry');
+    assert.equal(nextState.temperatureC, 22);
+  });
+
   it('turns the unit off from mode off', () => {
     const nextState = applyClimateMqttBurst({
       state: memoryState(),

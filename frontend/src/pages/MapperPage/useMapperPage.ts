@@ -10,12 +10,19 @@ import {
   upsertMappingDevice,
 } from '../../libs/services/bridgeApi';
 import { getButtonDisplayName } from '../../libs/buttonLabel';
-import type { DeviceMapping, DeviceTemplateIdAPI } from '../../libs/services/types';
+import type { DeviceIrSourceAPI, DeviceMapping, DeviceTemplateIdAPI } from '../../libs/services/types';
 import type { MapperPageProps } from '.';
+
+const TRAINER_DEVICE_REMOTE_ID = 'trainer';
+
+const isTrainerMapping = (device: Pick<DeviceMapping, 'irSource' | 'tuyaRemoteId'>): boolean => {
+  return device.irSource === 'trainer' || device.tuyaRemoteId === TRAINER_DEVICE_REMOTE_ID;
+};
 
 interface CreateDeviceForm {
   name: string;
   template: DeviceTemplateIdAPI;
+  irSource: DeviceIrSourceAPI;
 }
 
 const toDeviceId = (name: string): string => {
@@ -46,7 +53,7 @@ export const useMapperPage = (_props: MapperPageProps) => {
   });
 
   const createForm = useForm<CreateDeviceForm>({
-    defaultValues: { name: '', template: 'fan' },
+    defaultValues: { name: '', template: 'fan', irSource: 'catalog' },
   });
 
   const remotes = useMemo(
@@ -57,9 +64,12 @@ export const useMapperPage = (_props: MapperPageProps) => {
   const devices = mappingsQuery.data ?? [];
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId);
   const watchedTemplate = useWatch({ control: createForm.control, name: 'template' });
+  const watchedIrSource = useWatch({ control: createForm.control, name: 'irSource' });
   const selectedTemplate = templatesQuery.data?.find(
     (template) => template.id === (selectedDevice?.template ?? watchedTemplate),
   );
+  const isCreatingTrainerAc = watchedTemplate === 'ac' && watchedIrSource === 'trainer';
+  const isSelectedTrainerDevice = Boolean(selectedDevice && isTrainerMapping(selectedDevice));
 
   const saveMutation = useMutation({
     mutationFn: upsertMappingDevice,
@@ -83,7 +93,8 @@ export const useMapperPage = (_props: MapperPageProps) => {
   });
 
   const onCreateDevice = createForm.handleSubmit((values) => {
-    if (!selectedRemoteId) {
+    const shouldUseTrainer = values.template === 'ac' && values.irSource === 'trainer';
+    if (!shouldUseTrainer && !selectedRemoteId) {
       toast.error('Pick a Tuya remote first.');
       return;
     }
@@ -96,7 +107,8 @@ export const useMapperPage = (_props: MapperPageProps) => {
       id,
       name: values.name,
       template: values.template,
-      tuyaRemoteId: selectedRemoteId,
+      tuyaRemoteId: shouldUseTrainer ? TRAINER_DEVICE_REMOTE_ID : selectedRemoteId,
+      irSource: shouldUseTrainer ? 'trainer' : 'catalog',
       slots: {},
     };
     setSelectedDeviceId(id);
@@ -154,6 +166,9 @@ export const useMapperPage = (_props: MapperPageProps) => {
     onTestFire: (buttonId: string) => testFireMutation.mutate(buttonId),
     isTestFirePending: testFireMutation.isPending,
     createForm,
+    watchedTemplate,
+    isCreatingTrainerAc,
+    isSelectedTrainerDevice,
     onCreateDevice,
     onAssignSlot,
     onClearSlot,

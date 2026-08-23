@@ -70,9 +70,11 @@ const normalizeClimateMqttCommands = (commands: ClimateMqttCommand[]): ClimateMq
 export const applyClimateMqttBurst = ({
   state,
   commands,
+  shouldApplyAllFields = false,
 }: {
   state: ClimateAssumedState;
   commands: ClimateMqttCommand[];
+  shouldApplyAllFields?: boolean;
 }): ClimateAssumedState => {
   let nextState: ClimateAssumedState = {
     ...state,
@@ -113,14 +115,23 @@ export const applyClimateMqttBurst = ({
     }
   }
 
-  const shouldApplyTemperature = hasTemperature && !hasFanMode && !hasMode;
+  const shouldApplyTemperature =
+    hasTemperature && (shouldApplyAllFields || (!hasFanMode && !hasMode));
   if (shouldApplyTemperature && lastTemperature !== undefined) {
-    const temperatureState = applyAcTemperatureCommand({
-      state: nextState,
-      temperatureC: Number(lastTemperature),
-    });
-    if (temperatureState) {
-      nextState = temperatureState;
+    if (shouldApplyAllFields) {
+      nextState = {
+        ...nextState,
+        isOn: true,
+        temperatureC: clampAcTemperatureC(Number(lastTemperature)),
+      };
+    } else {
+      const temperatureState = applyAcTemperatureCommand({
+        state: nextState,
+        temperatureC: Number(lastTemperature),
+      });
+      if (temperatureState) {
+        nextState = temperatureState;
+      }
     }
   }
 

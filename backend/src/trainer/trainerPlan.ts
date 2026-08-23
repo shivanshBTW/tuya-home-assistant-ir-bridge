@@ -10,6 +10,8 @@ export const TRAINER_PARAM_MODE = 'mode';
 export const TRAINER_PARAM_TEMP = 'temp';
 export const TRAINER_PARAM_SPEED = 'speed';
 export const TRAINER_PARAM_POWER_SAVING = 'powerSaving';
+export const TRAINER_PARAM_POWER = 'power';
+export const TRAINER_DEVICE_REMOTE_ID = 'trainer';
 const TEMP_SWEEP_INDEXES = [0, 1] as const;
 
 const findParam = (schema: TrainerSchema, paramId: string): TrainerParam => {
@@ -43,17 +45,46 @@ export const listSeparateCommandParams = (schema: TrainerSchema): TrainerParam[]
 };
 
 export const normalizeTrainerSchema = (schema: TrainerSchema): TrainerSchema => {
+  const params = schema.params.map((param) => {
+    if (param.id !== TRAINER_PARAM_POWER_SAVING && param.id !== TRAINER_PARAM_POWER) {
+      return param;
+    }
+    return {
+      ...param,
+      isSeparateCommand: param.isSeparateCommand ?? true,
+    };
+  });
+  const hasPowerParam = params.some((param) => param.id === TRAINER_PARAM_POWER);
+  if (!hasPowerParam) {
+    params.push({
+      id: TRAINER_PARAM_POWER,
+      label: 'Power',
+      isSeparateCommand: true,
+      options: [{ id: 'off', label: 'Off' }],
+    });
+  }
   return {
     ...schema,
-    params: schema.params.map((param) => {
-      if (param.id !== TRAINER_PARAM_POWER_SAVING) {
-        return param;
-      }
-      return {
-        ...param,
-        isSeparateCommand: param.isSeparateCommand ?? true,
-      };
-    }),
+    params,
+    constraints: {
+      ...schema.constraints,
+      cool: {
+        ...(schema.constraints.cool ?? {}),
+        [TRAINER_PARAM_POWER]: schema.constraints.cool?.[TRAINER_PARAM_POWER] ?? { kind: 'all' },
+      },
+      dry: {
+        ...(schema.constraints.dry ?? {}),
+        [TRAINER_PARAM_POWER]: schema.constraints.dry?.[TRAINER_PARAM_POWER] ?? { kind: 'off' },
+      },
+      fan_only: {
+        ...(schema.constraints.fan_only ?? {}),
+        [TRAINER_PARAM_POWER]: schema.constraints.fan_only?.[TRAINER_PARAM_POWER] ?? { kind: 'off' },
+      },
+    },
+    anchorValues: {
+      ...schema.anchorValues,
+      [TRAINER_PARAM_POWER]: schema.anchorValues[TRAINER_PARAM_POWER] ?? 'off',
+    },
   };
 };
 
@@ -463,22 +494,31 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
           { id: 'off', label: 'Off' },
         ],
       },
+      {
+        id: TRAINER_PARAM_POWER,
+        label: 'Power',
+        isSeparateCommand: true,
+        options: [{ id: 'off', label: 'Off' }],
+      },
     ],
     constraints: {
       cool: {
         [TRAINER_PARAM_TEMP]: { kind: 'all' },
         [TRAINER_PARAM_SPEED]: { kind: 'all' },
         [TRAINER_PARAM_POWER_SAVING]: { kind: 'all' },
+        [TRAINER_PARAM_POWER]: { kind: 'all' },
       },
       dry: {
         [TRAINER_PARAM_TEMP]: { kind: 'all' },
         [TRAINER_PARAM_SPEED]: { kind: 'off' },
         [TRAINER_PARAM_POWER_SAVING]: { kind: 'off' },
+        [TRAINER_PARAM_POWER]: { kind: 'off' },
       },
       fan_only: {
         [TRAINER_PARAM_TEMP]: { kind: 'off' },
         [TRAINER_PARAM_SPEED]: { kind: 'all' },
         [TRAINER_PARAM_POWER_SAVING]: { kind: 'off' },
+        [TRAINER_PARAM_POWER]: { kind: 'off' },
       },
     },
     anchorValues: {
@@ -486,6 +526,7 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
       [TRAINER_PARAM_TEMP]: '24',
       [TRAINER_PARAM_SPEED]: 'medium',
       [TRAINER_PARAM_POWER_SAVING]: 'off',
+      [TRAINER_PARAM_POWER]: 'off',
     },
   };
 };

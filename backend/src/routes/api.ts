@@ -19,10 +19,11 @@ import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
 import { generateTrainerGrid } from '../trainer/trainerGenerate.js';
 import { inferTrainerFields } from '../trainer/trainerInfer.js';
-import { assertTrainerSchema } from '../trainer/trainerPlan.js';
+import { assertTrainerSchema, TRAINER_DEVICE_REMOTE_ID } from '../trainer/trainerPlan.js';
 import { toTrainerResponse } from '../trainer/trainerResponse.js';
 import { upsertTrainerSample } from '../trainer/trainerSamples.js';
 import { decodeTrainerText } from '../trainer/trainerText.js';
+import { sendTrainerIrBits } from '../trainer/trainerIrSend.js';
 import { listenForLocalIrCode } from '../tuya/localStudy.js';
 import { resolveTuyaLocalHost } from '../tuya/resolveLocalHost.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
@@ -49,14 +50,23 @@ const toStudyResponse = (study: StudyFile) => {
   };
 };
 
-const defaultAssumedState = (
-  templateId: DeviceMapping['template'],
-): FanAssumedState | MediaAssumedState | ClimateAssumedState => {
+const defaultAssumedState = ({
+  templateId,
+  irSource,
+}: {
+  templateId: DeviceMapping['template'];
+  irSource?: DeviceMapping['irSource'];
+}): FanAssumedState | MediaAssumedState | ClimateAssumedState => {
   if (templateId === 'fan') {
     return { isOn: false, speed: 1, isLedOn: false };
   }
   if (templateId === 'ac') {
-    return { isOn: false, mode: 'cool', temperatureC: 24, fanMode: 'low' };
+    return {
+      isOn: false,
+      mode: 'cool',
+      temperatureC: 24,
+      fanMode: irSource === 'trainer' ? 'medium' : 'low',
+    };
   }
   return { isOn: false, isMuted: false };
 };
@@ -237,10 +247,19 @@ export const registerRoutes = ({
       name?: string;
       template?: DeviceMapping['template'];
       tuyaRemoteId?: string;
+      irSource?: DeviceMapping['irSource'];
       slots?: DeviceMapping['slots'];
     };
-    if (!body.id || !body.name || !body.template || !body.tuyaRemoteId) {
-      throw new Error('id, name, template, and tuyaRemoteId are required');
+    const isTrainerDevice =
+      body.irSource === 'trainer' || body.tuyaRemoteId === TRAINER_DEVICE_REMOTE_ID;
+    const tuyaRemoteId = isTrainerDevice ? TRAINER_DEVICE_REMOTE_ID : body.tuyaRemoteId;
+    const irSource = isTrainerDevice ? 'trainer' : (body.irSource ?? 'catalog');
+    if (!body.id || !body.name || !body.template || !tuyaRemoteId) {
+      throw new Error(
+        isTrainerDevice
+          ? 'id, name, and template are required'
+          : 'id, name, template, and tuyaRemoteId are required',
+      );
     }
     getTemplateById(body.template);
     const mapping = await jsonStore.readMapping();
@@ -249,9 +268,11 @@ export const registerRoutes = ({
       id: body.id,
       name: body.name,
       template: body.template,
-      tuyaRemoteId: body.tuyaRemoteId,
+      tuyaRemoteId,
+      irSource,
       slots: body.slots ?? {},
-      assumedState: existing?.assumedState ?? defaultAssumedState(body.template),
+      assumedState:
+        existing?.assumedState ?? defaultAssumedState({ templateId: body.template, irSource }),
     };
     const devices = [...mapping.devices.filter((item) => item.id !== device.id), device];
     const nextMapping = { updatedAt: new Date().toISOString(), devices };
@@ -544,20 +565,14 @@ export const registerRoutes = ({
     if (!rawBits) {
       throw new Error('bits or a generated cellId is required');
     }
-    const compactBits = parseIrBitString(rawBits);
-    const pulses = bitsToPulses(compactBits);
     const localDevice = await requireLocalBlaster();
-    await sendLocalIrCode({
-      localDevice,
-      frame: catalogCodeToLocalIrFrame(pulsesToHex(pulses)),
-    });
+    const sendResult = await sendTrainerIrBits({ bits: rawBits, localDevice });
     console.log(
-      `Trainer fired ${compactBits.length} bits (${pulses.length} pulses) to ${localDevice.host}`,
+      `Trainer fired ${sendResult.bitCount} bits (${sendResult.pulseCount} pulses) to ${localDevice.host}`,
     );
     return {
       path: SEND_PATH_LOCAL,
-      bitCount: compactBits.length,
-      pulseCount: pulses.length,
+      ...sendResult,
     };
   });
 };

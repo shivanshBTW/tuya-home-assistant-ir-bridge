@@ -63,6 +63,7 @@ export const transformDeviceMappingFromAPI = (device: DeviceMappingAPI): DeviceM
     name: device.name,
     template: device.template,
     tuyaRemoteId: device.tuyaRemoteId,
+    irSource: device.irSource,
     slots: device.slots,
   };
 };

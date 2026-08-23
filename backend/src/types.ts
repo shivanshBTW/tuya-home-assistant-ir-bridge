@@ -46,6 +46,7 @@ export interface Catalog {
 }
 
 export type DeviceTemplateId = 'fan' | 'tv' | 'soundbar' | 'ac';
+export type DeviceIrSource = 'catalog' | 'trainer';
 
 export interface SlotDefinition {
   id: string;
@@ -88,6 +89,7 @@ export interface DeviceMapping {
   name: string;
   template: DeviceTemplateId;
   tuyaRemoteId: string;
+  irSource?: DeviceIrSource;
   slots: Record<string, MappedSlot>;
   assumedState: FanAssumedState | MediaAssumedState | ClimateAssumedState;
 }

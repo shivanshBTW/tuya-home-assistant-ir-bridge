@@ -28,6 +28,7 @@ import {
   type ClimateMqttCommand,
 } from './climateMqtt.js';
 import type {
+  Catalog,
   ClimateAssumedState,
   DeviceMapping,
   FanAssumedState,
@@ -36,8 +37,18 @@ import type {
   SlotDefinition,
 } from '../types.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
+import { resolveLocalBlaster } from '../tuya/localSend.js';
 import type { TuyaCloudClient } from '../tuya/cloudClient.js';
 import type { JsonStore } from '../store/jsonStore.js';
+import {
+  TRAINER_POWER_SAVING_HA_OPTIONS,
+  isTrainerBackedDevice,
+  listTrainerClimatePackets,
+  listTrainerPowerSavingPackets,
+  trainerPowerSavingHaLabel,
+  trainerPowerSavingOptionIdFromHa,
+} from '../trainer/trainerClimate.js';
+import { sendTrainerIrBits } from '../trainer/trainerIrSend.js';
 
 const BRIDGE_ID = 'tuya_ha_ir_bridge';
 
@@ -472,14 +483,17 @@ export class MqttPublisher {
       `${device.id}_power_saving`,
       'config',
     ]);
-    if (mappedPowerSavingSlots.length === 0) {
+    const isTrainerDevice = isTrainerBackedDevice(device);
+    if (!isTrainerDevice && mappedPowerSavingSlots.length === 0) {
       await this.client.publish(selectConfigTopic, '', { retain: true });
       return;
     }
     const commandTopic = topic(prefix, [...base, 'select', 'power_saving', 'set']);
-    const options = AC_POWER_SAVING_SLOT_IDS.filter((slotId) => Boolean(device.slots[slotId])).map(
-      (slotId) => AC_POWER_SAVING_OPTION_BY_SLOT_ID[slotId],
-    );
+    const options = isTrainerDevice
+      ? [...TRAINER_POWER_SAVING_HA_OPTIONS]
+      : AC_POWER_SAVING_SLOT_IDS.filter((slotId) => Boolean(device.slots[slotId])).map(
+          (slotId) => AC_POWER_SAVING_OPTION_BY_SLOT_ID[slotId],
+        );
     await this.client.publish(
       selectConfigTopic,
       JSON.stringify({
@@ -493,10 +507,13 @@ export class MqttPublisher {
       { retain: true },
     );
     await this.client.subscribe(commandTopic);
-    if (climateState.powerSaving && options.includes(climateState.powerSaving)) {
+    const publishedPowerSaving = isTrainerDevice
+      ? trainerPowerSavingHaLabel(climateState.powerSaving)
+      : climateState.powerSaving;
+    if (publishedPowerSaving && options.includes(publishedPowerSaving)) {
       await this.client.publish(
         topic(prefix, [...base, 'select', 'power_saving']),
-        climateState.powerSaving,
+        publishedPowerSaving,
         { retain: true },
       );
     }
@@ -524,9 +541,11 @@ export class MqttPublisher {
     }
 
     const previousClimateState = asClimateState(device.assumedState);
+    const isTrainerDevice = isTrainerBackedDevice(device);
     const nextState = applyClimateMqttBurst({
       state: previousClimateState,
       commands,
+      shouldApplyAllFields: isTrainerDevice,
     });
     device.assumedState = nextState;
     await this.publishClimateState(device);
@@ -550,6 +569,12 @@ export class MqttPublisher {
     };
 
     try {
+      if (isTrainerDevice) {
+        const trainer = await this.jsonStore.readTrainer();
+        const packets = listTrainerClimatePackets({ trainer, nextState });
+        await this.sendTrainerPackets({ deviceId, packets, catalog });
+        return;
+      }
       const climateButtons = listAcClimateButtonsToSend({
         catalog,
         remoteId: device.tuyaRemoteId,
@@ -697,13 +722,25 @@ export class MqttPublisher {
           }
           await sendSlot(slotId);
         } else if (messageTopic.endsWith('/select/power_saving/set')) {
-          const slotId = acPowerSavingSlotIdByOption(payload);
-          if (!slotId || !device.slots[slotId]) {
-            return;
+          if (isTrainerBackedDevice(device)) {
+            const optionId = trainerPowerSavingOptionIdFromHa(payload);
+            if (!optionId) {
+              return;
+            }
+            const trainer = await this.jsonStore.readTrainer();
+            const packets = listTrainerPowerSavingPackets({ trainer, optionId });
+            await this.sendTrainerPackets({ deviceId: device.id, packets, catalog });
+            previousClimateState.powerSaving = trainerPowerSavingHaLabel(optionId) ?? payload;
+            device.assumedState = previousClimateState;
+          } else {
+            const slotId = acPowerSavingSlotIdByOption(payload);
+            if (!slotId || !device.slots[slotId]) {
+              return;
+            }
+            await sendSlot(slotId);
+            previousClimateState.powerSaving = payload;
+            device.assumedState = previousClimateState;
           }
-          await sendSlot(slotId);
-          previousClimateState.powerSaving = payload;
-          device.assumedState = previousClimateState;
         } else {
           return;
         }
@@ -716,6 +753,9 @@ export class MqttPublisher {
       await this.jsonStore.writeMapping(nextMapping);
       if (device.template === 'ac') {
         await this.publishClimateState(device);
+        if (isTrainerBackedDevice(device)) {
+          await this.publishAcExtraEntities(device);
+        }
       } else if (device.template === 'fan') {
         await this.publishFanState(device);
       } else {
@@ -726,6 +766,39 @@ export class MqttPublisher {
         `MQTT command failed for ${messageTopic}: ${
           error instanceof Error ? error.message : String(error)
         }`,
+      );
+    }
+  }
+
+  private async sendTrainerPackets({
+    deviceId,
+    packets,
+    catalog,
+  }: {
+    deviceId: string;
+    packets: { bits: string; label: string }[];
+    catalog: Catalog;
+  }): Promise<void> {
+    if (!catalog.local.key) {
+      throw new Error('No catalog local key. Run export first.');
+    }
+    const localDevice = await resolveLocalBlaster({
+      localDevice: catalog.local,
+      configuredIp: this.appConfig.tuyaLocalIp,
+      configuredMac: this.appConfig.tuyaLocalMac,
+    });
+    if (!localDevice?.host) {
+      throw new Error('IR blaster LAN host was not found');
+    }
+    for (const [packetIndex, packet] of packets.entries()) {
+      if (packetIndex > 0) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, RATE_LIMIT_DELAY_MS);
+        });
+      }
+      const sendResult = await sendTrainerIrBits({ bits: packet.bits, localDevice });
+      console.log(
+        `MQTT trainer sent ${deviceId} ${packet.label} ${sendResult.bitCount} bits to ${localDevice.host}`,
       );
     }
   }

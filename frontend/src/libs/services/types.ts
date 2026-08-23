@@ -1,6 +1,7 @@
 export type ButtonSourceAPI = 'key' | 'learned';
 
 export type DeviceTemplateIdAPI = 'fan' | 'tv' | 'soundbar' | 'ac';
+export type DeviceIrSourceAPI = 'catalog' | 'trainer';
 
 export interface CatalogButtonAPI {
   id: string;
@@ -54,6 +55,7 @@ export interface DeviceMappingAPI {
   name: string;
   template: DeviceTemplateIdAPI;
   tuyaRemoteId: string;
+  irSource?: DeviceIrSourceAPI;
   slots: Record<string, MappedSlotAPI>;
   assumedState: Record<string, unknown>;
 }
@@ -112,6 +114,7 @@ export interface DeviceMapping {
   name: string;
   template: DeviceTemplateIdAPI;
   tuyaRemoteId: string;
+  irSource?: DeviceIrSourceAPI;
   slots: Record<string, MappedSlotAPI>;
 }
 

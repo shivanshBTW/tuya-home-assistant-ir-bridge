@@ -263,40 +263,87 @@ export const TrainerGenerate: FC<Props> = ({
               <Alert severity="warning">No generated combo for this selection yet.</Alert>
             )}
             {commandCells.length > 0 && (
-              <Stack spacing={1}>
-                <Typography variant="subtitle1">Power saving (separate command)</Typography>
-                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                  {commandCells.map((cell) => {
-                    const optionId = cell.paramValues.powerSaving ?? '';
-                    return (
-                      <Button
-                        key={cell.id}
-                        variant={cell.bits ? 'contained' : 'outlined'}
-                        onClick={() => (cell.bits ? onFireCell(cell) : onListenCell(cell))}
-                        disabled={cell.bits ? isFirePending : isListenPending}
-                      >
-                        {optionLabel({ schema, paramId: 'powerSaving', optionId })}
-                        {cell.bits ? '' : ' · capture'}
-                      </Button>
-                    );
-                  })}
-                </Stack>
-                {commandCells
-                  .filter((cell) => cell.status === 'needs_input')
-                  .map((cell) => (
-                    <CellActions
-                      key={`${cell.id}-input`}
-                      cell={cell}
-                      pasteByCellId={pasteByCellId}
-                      onPasteCellChange={onPasteCellChange}
-                      onFireCell={onFireCell}
-                      onListenCell={onListenCell}
-                      onSubmitCellText={onSubmitCellText}
-                      isFirePending={isFirePending}
-                      isListenPending={isListenPending}
-                      isTextPending={isTextPending}
-                    />
-                  ))}
+              <Stack spacing={2}>
+                {commandCells.some((cell) => cell.paramValues.powerSaving) && (
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle1">Power saving (separate command)</Typography>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                      {commandCells
+                        .filter((cell) => cell.paramValues.powerSaving)
+                        .map((cell) => {
+                          const optionId = cell.paramValues.powerSaving ?? '';
+                          return (
+                            <Button
+                              key={cell.id}
+                              variant={cell.bits ? 'contained' : 'outlined'}
+                              onClick={() => (cell.bits ? onFireCell(cell) : onListenCell(cell))}
+                              disabled={cell.bits ? isFirePending : isListenPending}
+                            >
+                              {optionLabel({ schema, paramId: 'powerSaving', optionId })}
+                              {cell.bits ? '' : ' · capture'}
+                            </Button>
+                          );
+                        })}
+                    </Stack>
+                    {commandCells
+                      .filter(
+                        (cell) => cell.paramValues.powerSaving && cell.status === 'needs_input',
+                      )
+                      .map((cell) => (
+                        <CellActions
+                          key={`${cell.id}-input`}
+                          cell={cell}
+                          pasteByCellId={pasteByCellId}
+                          onPasteCellChange={onPasteCellChange}
+                          onFireCell={onFireCell}
+                          onListenCell={onListenCell}
+                          onSubmitCellText={onSubmitCellText}
+                          isFirePending={isFirePending}
+                          isListenPending={isListenPending}
+                          isTextPending={isTextPending}
+                        />
+                      ))}
+                  </Stack>
+                )}
+                {commandCells.some((cell) => cell.paramValues.power) && (
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle1">Power Off (Google / HA)</Typography>
+                    <Alert severity="info">
+                      Capture the Off packet so Home Assistant and Google Home can turn the AC off.
+                    </Alert>
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                      {commandCells
+                        .filter((cell) => cell.paramValues.power)
+                        .map((cell) => (
+                          <Button
+                            key={cell.id}
+                            variant={cell.bits ? 'contained' : 'outlined'}
+                            onClick={() => (cell.bits ? onFireCell(cell) : onListenCell(cell))}
+                            disabled={cell.bits ? isFirePending : isListenPending}
+                          >
+                            Off
+                            {cell.bits ? '' : ' · capture'}
+                          </Button>
+                        ))}
+                    </Stack>
+                    {commandCells
+                      .filter((cell) => cell.paramValues.power && cell.status === 'needs_input')
+                      .map((cell) => (
+                        <CellActions
+                          key={`${cell.id}-input`}
+                          cell={cell}
+                          pasteByCellId={pasteByCellId}
+                          onPasteCellChange={onPasteCellChange}
+                          onFireCell={onFireCell}
+                          onListenCell={onListenCell}
+                          onSubmitCellText={onSubmitCellText}
+                          isFirePending={isFirePending}
+                          isListenPending={isListenPending}
+                          isTextPending={isTextPending}
+                        />
+                      ))}
+                  </Stack>
+                )}
               </Stack>
             )}
             <Accordion disableGutters>

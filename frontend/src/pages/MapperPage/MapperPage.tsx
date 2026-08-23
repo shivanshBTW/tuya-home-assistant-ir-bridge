@@ -51,6 +51,9 @@ export const MapperPage: FC<Props> = ({
   onTestFire,
   isTestFirePending,
   createForm,
+  watchedTemplate,
+  isCreatingTrainerAc,
+  isSelectedTrainerDevice,
   onCreateDevice,
   onAssignSlot,
   onClearSlot,
@@ -65,14 +68,6 @@ export const MapperPage: FC<Props> = ({
     return <Alert severity="error">{catalogErrorMessage}</Alert>;
   }
 
-  if (remotes.length === 0) {
-    return (
-      <Alert severity="info">
-        No catalog yet. Open Settings, set the API token, then export from Tuya Cloud.
-      </Alert>
-    );
-  }
-
   return (
     <Stack
       spacing={3}
@@ -85,27 +80,38 @@ export const MapperPage: FC<Props> = ({
       <Box sx={{ flexShrink: 0 }}>
         <Typography variant="h4">Build HA remotes</Typography>
         <Typography color="text.secondary">
-          Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot.
+          Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot. For
+          the trained AC, Google Home uses the climate entity (cool / dry / fan, 16–30°C, low /
+          medium / high). Power saving stays a Home Assistant select.
         </Typography>
       </Box>
 
+      {remotes.length === 0 && (
+        <Alert severity="info" sx={{ flexShrink: 0 }}>
+          No Tuya catalog remotes yet. You can still create a trained AC mapping. Export from
+          Settings if you need the blaster LAN key or catalog-library remotes.
+        </Alert>
+      )}
+
       <Paper sx={{ p: 2, flexShrink: 0 }}>
         <Stack spacing={2}>
-          <FormControl fullWidth>
-            <InputLabel id="remote-label">Tuya remote (button catalog)</InputLabel>
-            <Select
-              labelId="remote-label"
-              label="Tuya remote (button catalog)"
-              value={selectedRemoteId}
-              onChange={(event) => onSelectRemote(event.target.value)}
-            >
-              {remotes.map((remote) => (
-                <MenuItem key={remote.remoteId} value={remote.remoteId}>
-                  {remote.remoteName} ({remote.buttons.length} buttons)
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {!isCreatingTrainerAc && (
+            <FormControl fullWidth>
+              <InputLabel id="remote-label">Tuya remote (button catalog)</InputLabel>
+              <Select
+                labelId="remote-label"
+                label="Tuya remote (button catalog)"
+                value={selectedRemoteId}
+                onChange={(event) => onSelectRemote(event.target.value)}
+              >
+                {remotes.map((remote) => (
+                  <MenuItem key={remote.remoteId} value={remote.remoteId}>
+                    {remote.remoteName} ({remote.buttons.length} buttons)
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           <Box
             component="form"
@@ -123,7 +129,17 @@ export const MapperPage: FC<Props> = ({
               render={({ field }) => (
                 <FormControl sx={{ minWidth: 180 }}>
                   <InputLabel id="template-label">Template</InputLabel>
-                  <Select labelId="template-label" label="Template" {...field}>
+                  <Select
+                    labelId="template-label"
+                    label="Template"
+                    value={field.value}
+                    onChange={(event) => {
+                      field.onChange(event);
+                      if (event.target.value !== 'ac') {
+                        createForm.setValue('irSource', 'catalog');
+                      }
+                    }}
+                  >
                     <MenuItem value="fan">Fan</MenuItem>
                     <MenuItem value="tv">TV</MenuItem>
                     <MenuItem value="soundbar">Soundbar</MenuItem>
@@ -132,6 +148,21 @@ export const MapperPage: FC<Props> = ({
                 </FormControl>
               )}
             />
+            {watchedTemplate === 'ac' && (
+              <Controller
+                control={createForm.control}
+                name="irSource"
+                render={({ field }) => (
+                  <FormControl sx={{ minWidth: 220 }}>
+                    <InputLabel id="ir-source-label">IR source</InputLabel>
+                    <Select labelId="ir-source-label" label="IR source" {...field}>
+                      <MenuItem value="catalog">Bedroom AC library</MenuItem>
+                      <MenuItem value="trainer">Trained AC</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
+              />
+            )}
             <Button type="submit" variant="contained" disabled={isSavePending}>
               Create mapping
             </Button>
@@ -148,7 +179,9 @@ export const MapperPage: FC<Props> = ({
               >
                 {devices.map((device) => (
                   <MenuItem key={device.id} value={device.id}>
-                    {device.name} ({device.template})
+                    {device.name} (
+                    {device.template}
+                    {device.irSource === 'trainer' ? ', trained' : ''})
                   </MenuItem>
                 ))}
               </Select>
@@ -172,6 +205,12 @@ export const MapperPage: FC<Props> = ({
             Tuya buttons
           </Typography>
           <Stack spacing={1} sx={paneScrollSx}>
+            {isSelectedTrainerDevice || isCreatingTrainerAc ? (
+              <Alert severity="info">
+                Trained AC does not use Tuya catalog buttons. Climate IR comes from Train.
+              </Alert>
+            ) : (
+            <>
             {(selectedRemote?.buttons ?? []).map((button) => (
               <Box
                 key={button.id}
@@ -202,6 +241,8 @@ export const MapperPage: FC<Props> = ({
                 </Button>
               </Box>
             ))}
+            </>
+            )}
           </Stack>
         </Paper>
 
@@ -227,13 +268,27 @@ export const MapperPage: FC<Props> = ({
               equalizer, settings +/−, and pair become Home Assistant buttons on the same device.
             </Alert>
           )}
-          {(selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
+          {isSelectedTrainerDevice && (
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+              This mapping sends the Train remote — not the Bedroom AC library. Google Home sees
+              cool, dry, fan only, 16–30°C, and low/medium/high. Capture Power Off on Train so
+              Google can turn the unit off. Power saving is a Home Assistant select only.
+            </Alert>
+          )}
+          {!isSelectedTrainerDevice &&
+            (selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
               speed are sent from the Bedroom Air Conditioner library automatically. These six slots
               are optional Home Assistant extras from the Custom remote.
             </Alert>
           )}
+          {isSelectedTrainerDevice ? (
+            <Alert severity="success" sx={{ flexShrink: 0 }}>
+              No catalog slots to assign. MQTT will republish when you save. Expose this climate
+              entity to Google Home from Home Assistant.
+            </Alert>
+          ) : (
           <Stack spacing={1} sx={paneScrollSx}>
             {(selectedTemplate?.slots ?? []).map((slot) => {
               const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;
@@ -259,6 +314,7 @@ export const MapperPage: FC<Props> = ({
               );
             })}
           </Stack>
+          )}
         </Paper>
       </Box>
     </Stack>
