@@ -145,3 +145,25 @@ export interface SendResult {
   buttonId: string;
   remoteId: string;
 }
+
+export interface CatalogRemoteBitsSummary {
+  remoteId: string;
+  remoteName?: string;
+  buttonCount: number;
+}
+
+export interface CatalogRemoteBitButton {
+  id: string;
+  key: string;
+  keyName: string;
+  kind: CatalogIrCodeKind;
+  bits: string;
+  pulseCount: number;
+}
+
+export interface CatalogRemoteBits {
+  remotes: CatalogRemoteBitsSummary[];
+  selectedRemoteId: string;
+  remoteName?: string;
+  buttons: CatalogRemoteBitButton[];
+}

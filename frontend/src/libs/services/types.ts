@@ -178,6 +178,32 @@ export interface StudyDiffAPI {
   bitDiffs: IrBitDiffAPI[];
 }
 
+export interface CatalogRemoteBitsSummaryAPI {
+  remoteId: string;
+  remoteName?: string;
+  buttonCount: number;
+}
+
+export interface CatalogRemoteBitButtonAPI {
+  id: string;
+  key: string;
+  keyName: string;
+  kind: CatalogIrCodeKindAPI;
+  bits: string;
+  pulseCount: number;
+}
+
+export interface CatalogRemoteBitsAPI {
+  remotes: CatalogRemoteBitsSummaryAPI[];
+  selectedRemoteId: string;
+  remoteName?: string;
+  buttons: CatalogRemoteBitButtonAPI[];
+}
+
+export type CatalogRemoteBitsSummary = CatalogRemoteBitsSummaryAPI;
+export type CatalogRemoteBitButton = CatalogRemoteBitButtonAPI;
+export type CatalogRemoteBits = CatalogRemoteBitsAPI;
+
 export type IrDecode = IrDecodeAPI;
 export type IrPulseDiff = IrPulseDiffAPI;
 export type IrBitDiff = IrBitDiffAPI;

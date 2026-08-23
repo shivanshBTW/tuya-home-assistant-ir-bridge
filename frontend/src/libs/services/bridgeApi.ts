@@ -7,6 +7,8 @@ import {
 import type {
   Catalog,
   CatalogAPI,
+  CatalogRemoteBits,
+  CatalogRemoteBitsAPI,
   DeviceMapping,
   DeviceTemplate,
   DeviceTemplateAPI,
@@ -84,6 +86,21 @@ export const testFireButton = async (buttonId: string): Promise<{ path: string }
   return requestBridge<{ path: string }>({
     path: `/api/buttons/${encodeURIComponent(buttonId)}/test-fire`,
     method: 'POST',
+  });
+};
+
+export const fetchCatalogRemoteBits = async ({
+  remoteId,
+}: {
+  remoteId?: string;
+} = {}): Promise<CatalogRemoteBits> => {
+  const params = new URLSearchParams();
+  if (remoteId) {
+    params.set('remoteId', remoteId);
+  }
+  const query = params.toString();
+  return requestBridge<CatalogRemoteBitsAPI>({
+    path: query ? `/api/study/remote-bits?${query}` : '/api/study/remote-bits',
   });
 };
 

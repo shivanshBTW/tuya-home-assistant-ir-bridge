@@ -6,6 +6,7 @@ import type { JsonStore } from '../store/jsonStore.js';
 import { DEVICE_TEMPLATES, getTemplateById } from '../templates/deviceTemplates.js';
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
+import { listCatalogRemoteBits } from '../tuya/catalogRemoteBits.js';
 import { compareIrBits, compareIrPulses, decodeIrCode } from '../tuya/irDecode.js';
 import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
@@ -242,6 +243,18 @@ export const registerRoutes = ({
     await jsonStore.writeMapping(nextMapping);
     await mqttPublisher.publishAll();
     return nextMapping;
+  });
+
+  app.get('/api/study/remote-bits', async (request) => {
+    const catalog = await jsonStore.readCatalog();
+    if (!catalog) {
+      throw new Error('No catalog. Run export first.');
+    }
+    const query = request.query as { remoteId?: string };
+    return listCatalogRemoteBits({
+      catalog,
+      remoteId: query.remoteId,
+    });
   });
 
   app.get('/api/study', async () => toStudyResponse(await jsonStore.readStudy()));
