@@ -346,7 +346,7 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
           { id: '40', label: '40%' },
           { id: '60', label: '60%' },
           { id: '80', label: '80%' },
-          { id: '100', label: 'Off' },
+          { id: 'off', label: 'Off' },
         ],
       },
     ],
