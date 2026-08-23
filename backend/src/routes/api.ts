@@ -1,11 +1,15 @@
 import type { FastifyInstance } from 'fastify';
+import { SEND_PATH_LOCAL, STUDY_LISTEN_TIMEOUT_MS, STUDY_ROUTE_TIMEOUT_MS } from '../constants.js';
 import type { AppConfig } from '../config.js';
 import { requireTuyaCloudConfig } from '../config.js';
 import type { JsonStore } from '../store/jsonStore.js';
 import { DEVICE_TEMPLATES, getTemplateById } from '../templates/deviceTemplates.js';
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
-import { prepareLocalDevice } from '../tuya/localSend.js';
+import { compareIrPulses, decodeIrCode } from '../tuya/irDecode.js';
+import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
+import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
+import { listenForLocalIrCode } from '../tuya/localStudy.js';
 import { resolveTuyaLocalHost } from '../tuya/resolveLocalHost.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
 import type {
@@ -13,8 +17,21 @@ import type {
   DeviceMapping,
   FanAssumedState,
   MediaAssumedState,
+  StudyCapture,
+  StudyFile,
 } from '../types.js';
 import type { MqttPublisher } from '../mqtt/mqttPublisher.js';
+
+const toStudyResponse = (study: StudyFile) => {
+  return {
+    updatedAt: study.updatedAt,
+    log: study.log.map((capture) => ({
+      ...capture,
+      decode: decodeIrCode(capture.code),
+    })),
+    savedButtons: study.savedButtons,
+  };
+};
 
 const defaultAssumedState = (
   templateId: DeviceMapping['template'],
@@ -86,6 +103,24 @@ export const registerRoutes = ({
       cloudClient = undefined;
     }
     return cloudClient;
+  };
+
+  let isStudyListenInProgress = false;
+
+  const requireLocalBlaster = async () => {
+    const catalog = await jsonStore.readCatalog();
+    if (!catalog?.local.key) {
+      throw new Error('No catalog local key. Run export first.');
+    }
+    const localDevice = await resolveLocalBlaster({
+      localDevice: catalog.local,
+      configuredIp: appConfig.tuyaLocalIp,
+      configuredMac: appConfig.tuyaLocalMac,
+    });
+    if (!localDevice?.host) {
+      throw new Error('IR blaster LAN host was not found');
+    }
+    return localDevice;
   };
 
   app.get('/api/health', async () => ({ ok: true }));
@@ -207,5 +242,106 @@ export const registerRoutes = ({
     await jsonStore.writeMapping(nextMapping);
     await mqttPublisher.publishAll();
     return nextMapping;
+  });
+
+  app.get('/api/study', async () => toStudyResponse(await jsonStore.readStudy()));
+
+  app.post('/api/study/listen', async (request) => {
+    request.raw.setTimeout(STUDY_ROUTE_TIMEOUT_MS);
+    if (isStudyListenInProgress) {
+      throw new Error('Study listen is already running');
+    }
+    isStudyListenInProgress = true;
+    try {
+      const localDevice = await requireLocalBlaster();
+      const code = await listenForLocalIrCode({
+        localDevice,
+        timeoutMs: STUDY_LISTEN_TIMEOUT_MS,
+      });
+      const decode = decodeIrCode(code);
+      const capture: StudyCapture = {
+        id: crypto.randomUUID(),
+        receivedAt: new Date().toISOString(),
+        code,
+        kind: decode.kind,
+        pulseCount: decode.pulseCount,
+      };
+      const study = await jsonStore.readStudy();
+      study.log.push(capture);
+      await jsonStore.writeStudy(study);
+      console.log(`Study captured ${capture.id} pulses=${capture.pulseCount} kind=${capture.kind}`);
+      return {
+        capture: { ...capture, decode },
+        study: toStudyResponse(await jsonStore.readStudy()),
+      };
+    } finally {
+      isStudyListenInProgress = false;
+    }
+  });
+
+  app.post('/api/study/buttons', async (request) => {
+    const body = request.body as { captureId?: string; label?: string; notes?: string };
+    const captureId = body.captureId?.trim();
+    const label = body.label?.trim();
+    if (!captureId || !label) {
+      throw new Error('captureId and label are required');
+    }
+    const study = await jsonStore.readStudy();
+    const capture = study.log.find((item) => item.id === captureId);
+    if (!capture) {
+      throw new Error(`Unknown capture ${captureId}`);
+    }
+    const existing = study.savedButtons.find((item) => item.captureId === captureId);
+    const savedButton = {
+      id: existing?.id ?? crypto.randomUUID(),
+      captureId,
+      label,
+      ...(body.notes?.trim() ? { notes: body.notes.trim() } : {}),
+    };
+    study.savedButtons = [
+      ...study.savedButtons.filter((item) => item.captureId !== captureId),
+      savedButton,
+    ];
+    await jsonStore.writeStudy(study);
+    return toStudyResponse(await jsonStore.readStudy());
+  });
+
+  app.post('/api/study/replay/:captureId', async (request) => {
+    if (isStudyListenInProgress) {
+      throw new Error('Wait for study listen to finish before replay');
+    }
+    const { captureId } = request.params as { captureId: string };
+    const study = await jsonStore.readStudy();
+    const capture = study.log.find((item) => item.id === decodeURIComponent(captureId));
+    if (!capture) {
+      throw new Error(`Unknown capture ${captureId}`);
+    }
+    const localDevice = await requireLocalBlaster();
+    await sendLocalIrCode({
+      localDevice,
+      frame: catalogCodeToLocalIrFrame(capture.code),
+    });
+    console.log(`Study replayed ${capture.id} to ${localDevice.host}`);
+    return { path: SEND_PATH_LOCAL, captureId: capture.id };
+  });
+
+  app.get('/api/study/diff', async (request) => {
+    const query = request.query as { left?: string; right?: string };
+    if (!query.left || !query.right) {
+      throw new Error('left and right capture ids are required');
+    }
+    const study = await jsonStore.readStudy();
+    const leftCapture = study.log.find((item) => item.id === query.left);
+    const rightCapture = study.log.find((item) => item.id === query.right);
+    if (!leftCapture || !rightCapture) {
+      throw new Error('Both captures must exist in the study log');
+    }
+    const left = decodeIrCode(leftCapture.code);
+    const right = decodeIrCode(rightCapture.code);
+    return {
+      left: { ...leftCapture, decode: left },
+      right: { ...rightCapture, decode: right },
+      diffs: compareIrPulses({ left: left.pulses, right: right.pulses }),
+    };
   });
 };

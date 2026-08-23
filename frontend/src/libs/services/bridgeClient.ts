@@ -26,10 +26,12 @@ export const requestBridge = async <T>({
   path,
   method = 'GET',
   body,
+  timeoutMs,
 }: {
   path: string;
   method?: 'GET' | 'POST' | 'PUT';
   body?: unknown;
+  timeoutMs?: number;
 }): Promise<T> => {
   const headers: Record<string, string> = {
     'X-API-Token': getApiToken(),
@@ -38,11 +40,25 @@ export const requestBridge = async <T>({
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const abortController = timeoutMs === undefined ? undefined : new AbortController();
+  const timeoutHandle =
+    timeoutMs === undefined || !abortController
+      ? undefined
+      : window.setTimeout(() => abortController.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: abortController?.signal,
+    });
+  } finally {
+    if (timeoutHandle !== undefined) {
+      window.clearTimeout(timeoutHandle);
+    }
+  }
 
   if (!response.ok) {
     let message = `Request failed (${response.status})`;

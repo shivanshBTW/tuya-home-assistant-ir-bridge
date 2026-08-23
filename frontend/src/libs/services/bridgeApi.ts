@@ -13,7 +13,17 @@ import type {
   LocalHostStatus,
   LocalHostStatusAPI,
   MappingFileAPI,
+  StudyDiff,
+  StudyDiffAPI,
+  StudyFile,
+  StudyFileAPI,
+  StudyListenResult,
+  StudyListenResultAPI,
+  StudyReplayResult,
+  StudyReplayResultAPI,
 } from './types';
+
+const STUDY_LISTEN_TIMEOUT_MS = 32_000;
 
 export const fetchLocalHost = async ({
   shouldScanSubnet = false,
@@ -75,4 +85,53 @@ export const testFireButton = async (buttonId: string): Promise<{ path: string }
     path: `/api/buttons/${encodeURIComponent(buttonId)}/test-fire`,
     method: 'POST',
   });
+};
+
+export const fetchStudy = async (): Promise<StudyFile> => {
+  return requestBridge<StudyFileAPI>({ path: '/api/study' });
+};
+
+export const listenStudyCapture = async (): Promise<StudyListenResult> => {
+  return requestBridge<StudyListenResultAPI>({
+    path: '/api/study/listen',
+    method: 'POST',
+    timeoutMs: STUDY_LISTEN_TIMEOUT_MS,
+  });
+};
+
+export const saveStudyButton = async ({
+  captureId,
+  label,
+  notes,
+}: {
+  captureId: string;
+  label: string;
+  notes?: string;
+}): Promise<StudyFile> => {
+  return requestBridge<StudyFileAPI>({
+    path: '/api/study/buttons',
+    method: 'POST',
+    body: { captureId, label, notes },
+  });
+};
+
+export const replayStudyCapture = async (captureId: string): Promise<StudyReplayResult> => {
+  return requestBridge<StudyReplayResultAPI>({
+    path: `/api/study/replay/${encodeURIComponent(captureId)}`,
+    method: 'POST',
+  });
+};
+
+export const fetchStudyDiff = async ({
+  leftCaptureId,
+  rightCaptureId,
+}: {
+  leftCaptureId: string;
+  rightCaptureId: string;
+}): Promise<StudyDiff> => {
+  const params = new URLSearchParams({
+    left: leftCaptureId,
+    right: rightCaptureId,
+  });
+  return requestBridge<StudyDiffAPI>({ path: `/api/study/diff?${params.toString()}` });
 };

@@ -4,6 +4,65 @@ import type { LocalDevice } from '../types.js';
 import type { LocalIrFrame } from './irFrame.js';
 import { resolveTuyaLocalHost } from './resolveLocalHost.js';
 
+let cachedLocalTarget:
+  | {
+      host: string;
+      version?: string;
+      irSendDp?: string;
+    }
+  | undefined;
+
+export const clearCachedLocalTarget = (): void => {
+  cachedLocalTarget = undefined;
+};
+
+export const resolveLocalBlaster = async ({
+  localDevice,
+  configuredIp,
+  configuredMac,
+}: {
+  localDevice: LocalDevice;
+  configuredIp?: string;
+  configuredMac?: string;
+}): Promise<LocalDevice | undefined> => {
+  if (cachedLocalTarget) {
+    return {
+      ...localDevice,
+      host: cachedLocalTarget.host,
+      version: cachedLocalTarget.version ?? localDevice.version,
+      irSendDp: cachedLocalTarget.irSendDp,
+    };
+  }
+
+  const resolveHost = async (shouldScanSubnet: boolean) => {
+    return resolveTuyaLocalHost({
+      configuredIp,
+      configuredMac: configuredMac ?? localDevice.mac,
+      fallbackHost: localDevice.host,
+      deviceId: localDevice.id,
+      shouldScanSubnet,
+    });
+  };
+
+  let resolved = await resolveHost(false);
+  if (!resolved.host) {
+    resolved = await resolveHost(true);
+  }
+  if (!resolved.host) {
+    return undefined;
+  }
+
+  cachedLocalTarget = {
+    host: resolved.host,
+    version: resolved.discoveredVersion,
+  };
+  return {
+    ...localDevice,
+    host: resolved.host,
+    version: resolved.discoveredVersion ?? localDevice.version,
+  };
+};
+
 export const prepareLocalDevice = async ({
   localDevice,
   configuredIp,

@@ -1,3 +1,5 @@
+import type { CatalogIrCodeKind } from './tuya/irFrame.js';
+
 export type SendPath = 'local' | 'cloud';
 
 export type ButtonSource = 'key' | 'learned';
@@ -93,6 +95,41 @@ export interface DeviceMapping {
 export interface MappingFile {
   updatedAt: string;
   devices: DeviceMapping[];
+}
+
+export interface IrDecode {
+  kind: CatalogIrCodeKind;
+  pulseCount: number;
+  pulses: number[];
+  hex: string;
+  base64: string;
+}
+
+export interface IrPulseDiff {
+  index: number;
+  left?: number;
+  right?: number;
+}
+
+export interface StudyCapture {
+  id: string;
+  receivedAt: string;
+  code: string;
+  kind: CatalogIrCodeKind;
+  pulseCount: number;
+}
+
+export interface StudySavedButton {
+  id: string;
+  captureId: string;
+  label: string;
+  notes?: string;
+}
+
+export interface StudyFile {
+  updatedAt: string;
+  log: StudyCapture[];
+  savedButtons: StudySavedButton[];
 }
 
 export interface SendResult {

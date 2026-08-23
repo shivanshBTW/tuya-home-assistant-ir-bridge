@@ -1,10 +1,9 @@
 import { SEND_PATH_CLOUD, SEND_PATH_LOCAL } from '../constants.js';
-import type { Catalog, CatalogButton, LocalDevice, SendResult } from '../types.js';
+import type { Catalog, CatalogButton, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
 import { catalogCodeToLocalIrFrame, classifyCatalogIrCode } from './irFrame.js';
-import { sendLocalIrCode } from './localSend.js';
-import { resolveTuyaLocalHost } from './resolveLocalHost.js';
+import { clearCachedLocalTarget, resolveLocalBlaster, sendLocalIrCode } from './localSend.js';
 
 const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
   for (const remote of catalog.remotes) {
@@ -19,14 +18,6 @@ const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
 export const shouldSendCatalogButtonLocally = (button: CatalogButton): boolean => {
   return Boolean(button.code);
 };
-
-let cachedLocalTarget:
-  | {
-      host: string;
-      version?: string;
-      irSendDp?: string;
-    }
-  | undefined;
 
 export const sendCatalogButton = async ({
   catalog,
@@ -62,51 +53,16 @@ export const sendCatalogButton = async ({
     return { path: SEND_PATH_CLOUD, buttonId: button.id, remoteId: remote.remoteId };
   };
 
-  const resolveLocalDevice = async (): Promise<LocalDevice | undefined> => {
-    if (cachedLocalTarget) {
-      return {
-        ...catalog.local,
-        host: cachedLocalTarget.host,
-        version: cachedLocalTarget.version ?? catalog.local.version,
-        irSendDp: cachedLocalTarget.irSendDp,
-      };
-    }
-
-    const resolveHost = async (shouldScanSubnet: boolean) => {
-      return resolveTuyaLocalHost({
-        configuredIp,
-        configuredMac: configuredMac ?? catalog.local.mac,
-        fallbackHost: catalog.local.host,
-        deviceId: catalog.local.id,
-        shouldScanSubnet,
-      });
-    };
-
-    let resolved = await resolveHost(false);
-    if (!resolved.host) {
-      resolved = await resolveHost(true);
-    }
-    if (!resolved.host) {
-      return undefined;
-    }
-
-    cachedLocalTarget = {
-      host: resolved.host,
-      version: resolved.discoveredVersion,
-    };
-    return {
-      ...catalog.local,
-      host: resolved.host,
-      version: resolved.discoveredVersion ?? catalog.local.version,
-    };
-  };
-
   const sendViaLocal = async (): Promise<SendResult | undefined> => {
     const irCode = button.code;
     if (!irCode || !shouldSendCatalogButtonLocally(button) || !catalog.local.key) {
       return undefined;
     }
-    const localDevice = await resolveLocalDevice();
+    const localDevice = await resolveLocalBlaster({
+      localDevice: catalog.local,
+      configuredIp,
+      configuredMac,
+    });
     if (!localDevice?.host) {
       return undefined;
     }
@@ -120,7 +76,7 @@ export const sendCatalogButton = async ({
       );
       return { path: SEND_PATH_LOCAL, buttonId: button.id, remoteId: remote.remoteId };
     } catch (error) {
-      cachedLocalTarget = undefined;
+      clearCachedLocalTarget();
       console.warn(
         `Local send failed, will try cloud if configured: ${
           error instanceof Error ? error.message : String(error)

@@ -6,6 +6,7 @@ import { AppLayout } from './components/AppLayout';
 import { KeypadPage } from './pages/KeypadPage';
 import { MapperPage } from './pages/MapperPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { StudyPage } from './pages/StudyPage';
 import { ColorModeProvider } from './theme/ColorModeProvider';
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ export const App = () => {
               <Routes>
                 <Route path="/" element={<MapperPage />} />
                 <Route path="/keypad" element={<KeypadPage />} />
+                <Route path="/study" element={<StudyPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </Box>

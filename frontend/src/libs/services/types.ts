@@ -114,3 +114,66 @@ export interface DeviceMapping {
   tuyaRemoteId: string;
   slots: Record<string, MappedSlotAPI>;
 }
+
+export type CatalogIrCodeKindAPI = 'cloud_hex' | 'symbol_key' | 'lan_base64';
+
+export interface IrDecodeAPI {
+  kind: CatalogIrCodeKindAPI;
+  pulseCount: number;
+  pulses: number[];
+  hex: string;
+  base64: string;
+}
+
+export interface IrPulseDiffAPI {
+  index: number;
+  left?: number;
+  right?: number;
+}
+
+export interface StudyCaptureAPI {
+  id: string;
+  receivedAt: string;
+  code: string;
+  kind: CatalogIrCodeKindAPI;
+  pulseCount: number;
+  decode: IrDecodeAPI;
+}
+
+export interface StudySavedButtonAPI {
+  id: string;
+  captureId: string;
+  label: string;
+  notes?: string;
+}
+
+export interface StudyFileAPI {
+  updatedAt: string;
+  log: StudyCaptureAPI[];
+  savedButtons: StudySavedButtonAPI[];
+}
+
+export interface StudyListenResultAPI {
+  capture: StudyCaptureAPI;
+  study: StudyFileAPI;
+}
+
+export interface StudyReplayResultAPI {
+  path: string;
+  captureId: string;
+}
+
+export interface StudyDiffAPI {
+  left: StudyCaptureAPI;
+  right: StudyCaptureAPI;
+  diffs: IrPulseDiffAPI[];
+}
+
+export type IrDecode = IrDecodeAPI;
+export type IrPulseDiff = IrPulseDiffAPI;
+export type StudyCapture = StudyCaptureAPI;
+export type StudySavedButton = StudySavedButtonAPI;
+export type StudyFile = StudyFileAPI;
+export type StudyListenResult = StudyListenResultAPI;
+export type StudyReplayResult = StudyReplayResultAPI;
+export type StudyDiff = StudyDiffAPI;

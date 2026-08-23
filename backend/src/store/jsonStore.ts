@@ -1,9 +1,16 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { Catalog, MappingFile } from '../types.js';
+import type { Catalog, MappingFile, StudyFile } from '../types.js';
 
 const CATALOG_FILE_NAME = 'catalog.json';
 const MAPPING_FILE_NAME = 'mapping.json';
+const STUDY_FILE_NAME = 'study.json';
+
+const emptyStudyFile = (): StudyFile => ({
+  updatedAt: new Date().toISOString(),
+  log: [],
+  savedButtons: [],
+});
 
 export class JsonStore {
   constructor(private readonly dataDir: string) {}
@@ -14,6 +21,10 @@ export class JsonStore {
 
   private mappingPath(): string {
     return path.join(this.dataDir, MAPPING_FILE_NAME);
+  }
+
+  private studyPath(): string {
+    return path.join(this.dataDir, STUDY_FILE_NAME);
   }
 
   async ensureDataDir(): Promise<void> {
@@ -56,5 +67,31 @@ export class JsonStore {
       updatedAt: new Date().toISOString(),
     };
     await writeFile(this.mappingPath(), `${JSON.stringify(nextMapping, null, 2)}\n`, 'utf8');
+  }
+
+  async readStudy(): Promise<StudyFile> {
+    try {
+      const raw = await readFile(this.studyPath(), 'utf8');
+      const parsed = JSON.parse(raw) as Partial<StudyFile>;
+      return {
+        updatedAt: parsed.updatedAt ?? new Date().toISOString(),
+        log: Array.isArray(parsed.log) ? parsed.log : [],
+        savedButtons: Array.isArray(parsed.savedButtons) ? parsed.savedButtons : [],
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return emptyStudyFile();
+      }
+      throw error;
+    }
+  }
+
+  async writeStudy(study: StudyFile): Promise<void> {
+    await this.ensureDataDir();
+    const nextStudy: StudyFile = {
+      ...study,
+      updatedAt: new Date().toISOString(),
+    };
+    await writeFile(this.studyPath(), `${JSON.stringify(nextStudy, null, 2)}\n`, 'utf8');
   }
 }
