@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  TRAINER_PARAM_POWER_SAVING,
   TRAINER_PARAM_TEMP,
   createDefaultAcTrainerSchema,
   listAllowedOptionIds,
@@ -40,5 +41,15 @@ describe('listTrainerCapturePlan', () => {
     );
     assert.equal(fanTempProbes.length, 2);
     assert.equal(fanTempProbes[0]?.paramValues[TRAINER_PARAM_TEMP], undefined);
+    assert.equal(
+      plan.some((step) => step.kind === 'probe' && step.probeParamId === TRAINER_PARAM_POWER_SAVING),
+      false,
+    );
+    assert.equal(
+      plan
+        .filter((step) => step.kind === 'cycle' && step.unlockedParamId === TRAINER_PARAM_TEMP)
+        .every((step) => step.paramValues[TRAINER_PARAM_POWER_SAVING] === undefined),
+      true,
+    );
   });
 });

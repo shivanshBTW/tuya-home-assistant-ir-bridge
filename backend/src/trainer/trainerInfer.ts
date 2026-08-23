@@ -6,6 +6,7 @@ import type {
   TrainerSample,
   TrainerSchema,
 } from '../types.js';
+import { isSeparateCommandParam } from './trainerPlan.js';
 
 const sliceBits = (bits: string, bitIndexes: number[]): string => {
   return bitIndexes.map((index) => bits[index] ?? '').join('');
@@ -321,7 +322,7 @@ const listOtherLayoutSampleIds = (samples: TrainerSample[]): Set<string> => {
   );
 };
 
-const listInconsistentSampleIds = (samples: TrainerSample[]): Set<string> => {
+export const listInconsistentSampleIds = (samples: TrainerSample[]): Set<string> => {
   const samplesByParamValues = new Map<string, TrainerSample[]>();
   for (const sample of samples) {
     const groupKey = serializeParamValues(sample.paramValues);
@@ -484,6 +485,17 @@ export const inferTrainerFields = ({
   }
 
   const fields: TrainerParamField[] = schema.params.map((param) => {
+    if (isSeparateCommandParam(param)) {
+      const reason = 'separate command — not part of the mode frame';
+      unresolved.push(`${param.id}: ${reason}`);
+      return {
+        paramId: param.id,
+        bitIndexes: [],
+        kind: 'unresolved',
+        lookup: {},
+        unresolvedReason: reason,
+      };
+    }
     const rawIndexes = [...(flipsByParamId[param.id] ?? [])].sort((left, right) => left - right);
     const bitIndexes = rawIndexes.filter((index) => !checksumSet.has(index));
     const hasAxisPairs = (flipsByParamId[param.id]?.size ?? 0) > 0;
@@ -548,6 +560,10 @@ export const inferTrainerFields = ({
     const constraints = schema.constraints[primaryOption.id] ?? {};
     for (const [paramId, constraint] of Object.entries(constraints)) {
       if (constraint.kind !== 'off') {
+        continue;
+      }
+      const constraintParam = schema.params.find((item) => item.id === paramId);
+      if (constraintParam && isSeparateCommandParam(constraintParam)) {
         continue;
       }
       const field = fields.find((item) => item.paramId === paramId && item.kind !== 'unresolved');

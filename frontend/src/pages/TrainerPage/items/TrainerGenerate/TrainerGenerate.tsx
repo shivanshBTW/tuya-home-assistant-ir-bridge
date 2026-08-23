@@ -13,6 +13,7 @@ type Props = Pick<
   | 'schema'
   | 'generation'
   | 'visibleGenerateCells'
+  | 'commandCells'
   | 'generateFilter'
   | 'generateModeId'
   | 'pasteByCellId'
@@ -35,6 +36,7 @@ export const TrainerGenerate: FC<Props> = ({
   schema,
   generation,
   visibleGenerateCells,
+  commandCells,
   generateFilter,
   generateModeId,
   pasteByCellId,
@@ -60,8 +62,8 @@ export const TrainerGenerate: FC<Props> = ({
       <Stack spacing={2}>
         <Typography variant="h6">Generate</Typography>
         <Typography color="text.secondary">
-          Ready cells can be sent. Empty cells need a capture — usually power saving, which uses a
-          different packet.
+          Mode / temp / speed share one packet and can be generated. Power saving is a separate
+          command — capture each option, then send it on its own.
         </Typography>
         <Button variant="contained" onClick={onGenerate} disabled={isGeneratePending}>
           {isGeneratePending ? 'Generating…' : 'Generate from samples'}
@@ -101,6 +103,78 @@ export const TrainerGenerate: FC<Props> = ({
                 ))}
               </TextField>
             </Stack>
+            {commandCells.length > 0 && (
+              <Stack spacing={1}>
+                <Typography variant="subtitle1">Separate commands</Typography>
+                {commandCells.map((cell) => {
+                  const hasBits = Boolean(cell.bits);
+                  return (
+                    <Stack
+                      key={cell.id}
+                      spacing={1}
+                      sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5 }}
+                    >
+                      <Typography>
+                        {hasBits ? 'Captured' : 'Empty'} · {cell.label}
+                      </Typography>
+                      {cell.bits && (
+                        <Typography
+                          sx={{
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                            fontSize: 13,
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          {formatBits(cell.bits)}
+                        </Typography>
+                      )}
+                      {cell.needsInputReason && (
+                        <Alert severity="warning">{cell.needsInputReason}</Alert>
+                      )}
+                      {!hasBits && (
+                        <TextField
+                          label="Paste bits, hex, base64, or pulses"
+                          value={pasteByCellId[cell.id] ?? ''}
+                          onChange={(event) => onPasteCellChange(cell.id, event.target.value)}
+                          multiline
+                          minRows={2}
+                        />
+                      )}
+                      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                        {hasBits && (
+                          <Button
+                            variant="contained"
+                            onClick={() => onFireCell(cell)}
+                            disabled={isFirePending}
+                          >
+                            Send
+                          </Button>
+                        )}
+                        {!hasBits && (
+                          <>
+                            <Button
+                              variant="outlined"
+                              onClick={() => onSubmitCellText(cell)}
+                              disabled={isTextPending || !(pasteByCellId[cell.id] ?? '').trim()}
+                            >
+                              Save text
+                            </Button>
+                            <Button
+                              variant="contained"
+                              onClick={() => onListenCell(cell)}
+                              disabled={isListenPending}
+                            >
+                              {isListenPending ? 'Listening…' : 'Listen'}
+                            </Button>
+                          </>
+                        )}
+                      </Stack>
+                    </Stack>
+                  );
+                })}
+              </Stack>
+            )}
+            <Typography variant="subtitle1">Mode frame</Typography>
             {visibleGenerateCells.length === 0 && (
               <Typography color="text.secondary">Nothing in this filter.</Typography>
             )}

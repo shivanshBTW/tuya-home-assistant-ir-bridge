@@ -44,12 +44,16 @@ const encodeFrame = ({
 };
 
 describe('listLegalTrainerStates', () => {
-  it('lists cool temp×speed×powerSaving and omits disabled fan temp', () => {
+  it('lists cool temp×speed without powerSaving and omits disabled fan temp', () => {
     const schema = createDefaultAcTrainerSchema();
     const states = listLegalTrainerStates(schema);
     const coolStates = states.filter((paramValues) => paramValues.mode === 'cool');
     const fanStates = states.filter((paramValues) => paramValues.mode === 'fan_only');
-    assert.equal(coolStates.length, 15 * 3 * 4);
+    assert.equal(coolStates.length, 15 * 3);
+    assert.equal(
+      coolStates.every((paramValues) => paramValues.powerSaving === undefined),
+      true,
+    );
     assert.equal(fanStates.length, 3);
     assert.equal(
       fanStates.every((paramValues) => paramValues.temp === undefined),
@@ -131,42 +135,41 @@ describe('generateTrainerGrid', () => {
     assert.equal(generation.checksumKind, 'nibble_sum');
     const cool18Medium = generation.cells.find(
       (cell) =>
+        cell.kind === 'frame' &&
         cell.paramValues.mode === 'cool' &&
         cell.paramValues.temp === '18' &&
-        cell.paramValues.speed === 'medium' &&
-        cell.paramValues.powerSaving === 'off',
+        cell.paramValues.speed === 'medium',
     );
     assert.equal(cool18Medium?.status, 'generated');
     assert.equal(cool18Medium?.bits, '1000100000001000001100101101');
     const cool24High = generation.cells.find(
       (cell) =>
+        cell.kind === 'frame' &&
         cell.paramValues.mode === 'cool' &&
         cell.paramValues.temp === '24' &&
-        cell.paramValues.speed === 'high' &&
-        cell.paramValues.powerSaving === 'off',
+        cell.paramValues.speed === 'high',
     );
     assert.equal(cool24High?.status, 'generated');
     assert.equal(cool24High?.bits, encodeFrame({ tempBits: '1001', speedBits: '0100', checksumBits: '0101' }));
     const dry24 = generation.cells.find(
-      (cell) => cell.paramValues.mode === 'dry' && cell.paramValues.temp === '24' && cell.paramValues.powerSaving === 'off',
+      (cell) => cell.kind === 'frame' && cell.paramValues.mode === 'dry' && cell.paramValues.temp === '24',
     );
     assert.equal(dry24?.status, 'generated');
     assert.equal(dry24?.bits, '1000100000001001100100000010');
     const powerSaving40 = generation.cells.find(
-      (cell) =>
-        cell.paramValues.mode === 'cool' &&
-        cell.paramValues.temp === '24' &&
-        cell.paramValues.speed === 'medium' &&
-        cell.paramValues.powerSaving === '40',
+      (cell) => cell.kind === 'command' && cell.paramValues.powerSaving === '40',
     );
     assert.equal(powerSaving40?.status, 'captured');
     const powerSaving60 = generation.cells.find(
-      (cell) =>
-        cell.paramValues.mode === 'cool' &&
-        cell.paramValues.temp === '16' &&
-        cell.paramValues.speed === 'low' &&
-        cell.paramValues.powerSaving === '60',
+      (cell) => cell.kind === 'command' && cell.paramValues.powerSaving === '60',
     );
     assert.equal(powerSaving60?.status, 'needs_input');
+    assert.equal(
+      generation.cells.filter(
+        (cell) => cell.kind === 'frame' && cell.paramValues.powerSaving !== undefined,
+      ).length,
+      0,
+    );
+    assert.equal(generation.cells.filter((cell) => cell.kind === 'command').length, 4);
   });
 });

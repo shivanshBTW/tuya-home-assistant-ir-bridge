@@ -58,6 +58,7 @@ export const TrainerPage: FC<Props> = ({
   inference,
   generation,
   visibleGenerateCells,
+  commandCells,
   generateFilter,
   generateModeId,
   pasteByStepId,
@@ -176,6 +177,9 @@ export const TrainerPage: FC<Props> = ({
                           <MenuItem value="some">Some options</MenuItem>
                           <MenuItem value="off">Off</MenuItem>
                         </TextField>
+                        {param.isSeparateCommand && (
+                          <Typography color="text.secondary">Separate command</Typography>
+                        )}
                         {constraint.kind === 'some' && (
                           <TextField
                             select
@@ -344,6 +348,7 @@ export const TrainerPage: FC<Props> = ({
         schema={schema}
         generation={generation}
         visibleGenerateCells={visibleGenerateCells}
+        commandCells={commandCells}
         generateFilter={generateFilter}
         generateModeId={generateModeId}
         pasteByCellId={pasteByCellId}

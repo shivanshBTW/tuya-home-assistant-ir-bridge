@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { createEmptyTrainerFile } from '../trainer/trainerPlan.js';
+import { createEmptyTrainerFile, normalizeTrainerSchema } from '../trainer/trainerPlan.js';
 import type { Catalog, MappingFile, StudyFile, TrainerFile } from '../types.js';
 
 const CATALOG_FILE_NAME = 'catalog.json';
@@ -108,7 +108,9 @@ export class JsonStore {
       const emptyTrainerFile = createEmptyTrainerFile();
       return {
         updatedAt: parsed.updatedAt ?? emptyTrainerFile.updatedAt,
-        schema: parsed.schema ?? emptyTrainerFile.schema,
+        schema: parsed.schema
+          ? normalizeTrainerSchema(parsed.schema)
+          : emptyTrainerFile.schema,
         samples: Array.isArray(parsed.samples) ? parsed.samples : [],
         ...(parsed.inference ? { inference: parsed.inference } : {}),
         ...(parsed.generation ? { generation: parsed.generation } : {}),

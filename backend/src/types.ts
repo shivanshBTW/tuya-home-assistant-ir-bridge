@@ -183,6 +183,7 @@ export interface TrainerParam {
   id: string;
   label: string;
   options: TrainerParamOption[];
+  isSeparateCommand?: boolean;
 }
 
 export interface TrainerConstraint {
@@ -235,9 +236,11 @@ export interface TrainerInference {
 
 export type TrainerChecksumKind = 'nibble_sum' | 'nibble_xor' | 'unknown';
 export type TrainerGeneratedStatus = 'generated' | 'captured' | 'needs_input';
+export type TrainerGeneratedKind = 'frame' | 'command';
 
 export interface TrainerGeneratedCell {
   id: string;
+  kind: TrainerGeneratedKind;
   paramValues: Record<string, string>;
   label: string;
   status: TrainerGeneratedStatus;

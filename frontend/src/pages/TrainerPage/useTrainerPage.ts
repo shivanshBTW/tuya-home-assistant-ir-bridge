@@ -24,9 +24,11 @@ const trainerStepKey = (step: TrainerCaptureStep): string => {
 const sampleMatchesStep = ({
   sample,
   step,
+  separateCommandParamIds,
 }: {
   sample: { unlockedParamId: string; paramValues: Record<string, string>; probeIndex?: number; probeParamId?: string };
   step: TrainerCaptureStep;
+  separateCommandParamIds: Set<string>;
 }): boolean => {
   if (sample.unlockedParamId !== step.unlockedParamId) {
     return false;
@@ -38,7 +40,12 @@ const sampleMatchesStep = ({
     return false;
   }
   const paramIds = new Set([...Object.keys(sample.paramValues), ...Object.keys(step.paramValues)]);
-  return [...paramIds].every((paramId) => sample.paramValues[paramId] === step.paramValues[paramId]);
+  return [...paramIds].every((paramId) => {
+    if (separateCommandParamIds.has(paramId) && step.unlockedParamId !== paramId) {
+      return true;
+    }
+    return sample.paramValues[paramId] === step.paramValues[paramId];
+  });
 };
 
 export const useTrainerPage = (_props: TrainerPageProps) => {
@@ -55,16 +62,25 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
   const schema = schemaDraft ?? trainerQuery.data?.schema;
   const inference = trainerQuery.data?.inference;
   const generation = trainerQuery.data?.generation;
+  const separateCommandParamIds = useMemo(() => {
+    return new Set(
+      (schema?.params ?? [])
+        .filter((param) => param.isSeparateCommand)
+        .map((param) => param.id),
+    );
+  }, [schema?.params]);
   const sampleByStepId = useMemo(() => {
     const samples = trainerQuery.data?.samples ?? [];
     const capturePlan = trainerQuery.data?.capturePlan ?? [];
     return Object.fromEntries(
       capturePlan.flatMap((step) => {
-        const sample = samples.find((item) => sampleMatchesStep({ sample: item, step }));
+        const sample = samples.find((item) =>
+          sampleMatchesStep({ sample: item, step, separateCommandParamIds }),
+        );
         return sample ? [[trainerStepKey(step), sample]] : [];
       }),
     );
-  }, [trainerQuery.data?.capturePlan, trainerQuery.data?.samples]);
+  }, [separateCommandParamIds, trainerQuery.data?.capturePlan, trainerQuery.data?.samples]);
   const capturePlan = trainerQuery.data?.capturePlan ?? [];
   const nextStep = capturePlan.find((step) => !sampleByStepId[trainerStepKey(step)]);
 
@@ -130,7 +146,7 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
   };
 
   const visibleGenerateCells = useMemo(() => {
-    const cells = generation?.cells ?? [];
+    const cells = (generation?.cells ?? []).filter((cell) => cell.kind !== 'command');
     return cells.filter((cell) => {
       if (generateModeId && cell.paramValues[schema?.primaryParamId ?? 'mode'] !== generateModeId) {
         return false;
@@ -144,6 +160,9 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
       return true;
     });
   }, [generateFilter, generateModeId, generation?.cells, schema?.primaryParamId]);
+  const commandCells = useMemo(() => {
+    return (generation?.cells ?? []).filter((cell) => cell.kind === 'command');
+  }, [generation?.cells]);
 
   return {
     schema,
@@ -154,6 +173,7 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     inference,
     generation,
     visibleGenerateCells,
+    commandCells,
     generateFilter,
     generateModeId,
     pasteByStepId,

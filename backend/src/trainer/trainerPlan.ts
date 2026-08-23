@@ -32,6 +32,31 @@ const constraintFor = ({
   return schema.constraints[primaryOptionId]?.[paramId] ?? { kind: 'all' };
 };
 
+export const isSeparateCommandParam = (param: TrainerParam): boolean => {
+  return param.isSeparateCommand === true;
+};
+
+export const listSeparateCommandParams = (schema: TrainerSchema): TrainerParam[] => {
+  return schema.params.filter(
+    (param) => param.id !== schema.primaryParamId && isSeparateCommandParam(param),
+  );
+};
+
+export const normalizeTrainerSchema = (schema: TrainerSchema): TrainerSchema => {
+  return {
+    ...schema,
+    params: schema.params.map((param) => {
+      if (param.id !== TRAINER_PARAM_POWER_SAVING) {
+        return param;
+      }
+      return {
+        ...param,
+        isSeparateCommand: param.isSeparateCommand ?? true,
+      };
+    }),
+  };
+};
+
 export const listAllowedOptionIds = ({
   schema,
   paramId,
@@ -67,7 +92,7 @@ export const buildLeftoverValues = ({
     [schema.primaryParamId]: primaryOptionId,
   };
   for (const param of schema.params) {
-    if (param.id === schema.primaryParamId) {
+    if (param.id === schema.primaryParamId || isSeparateCommandParam(param)) {
       continue;
     }
     const allowedOptionIds = listAllowedOptionIds({
@@ -187,7 +212,9 @@ export const listLegalTrainerStates = (schema: TrainerSchema): Record<string, st
   const primaryParam = findParam(schema, schema.primaryParamId);
   const states: Record<string, string>[] = [];
   for (const primaryOption of primaryParam.options) {
-    const secondaryParams = schema.params.filter((param) => param.id !== schema.primaryParamId);
+    const secondaryParams = schema.params.filter(
+      (param) => param.id !== schema.primaryParamId && !isSeparateCommandParam(param),
+    );
     const walk = (paramIndex: number, paramValues: Record<string, string>): void => {
       if (paramIndex >= secondaryParams.length) {
         states.push(paramValues);
@@ -211,6 +238,34 @@ export const listLegalTrainerStates = (schema: TrainerSchema): Record<string, st
       }
     };
     walk(0, { [schema.primaryParamId]: primaryOption.id });
+  }
+  return states;
+};
+
+export const listSeparateCommandStates = (schema: TrainerSchema): Record<string, string>[] => {
+  const states: Record<string, string>[] = [];
+  const primaryParam = findParam(schema, schema.primaryParamId);
+  for (const param of listSeparateCommandParams(schema)) {
+    for (const primaryOption of primaryParam.options) {
+      const allowedOptionIds = listAllowedOptionIds({
+        schema,
+        paramId: param.id,
+        primaryOptionId: primaryOption.id,
+      });
+      if (allowedOptionIds.length === 0) {
+        continue;
+      }
+      const leftoverValues = buildLeftoverValues({
+        schema,
+        primaryOptionId: primaryOption.id,
+      });
+      for (const optionId of allowedOptionIds) {
+        states.push({
+          ...leftoverValues,
+          [param.id]: optionId,
+        });
+      }
+    }
   }
   return states;
 };
@@ -332,7 +387,7 @@ export const listTrainerCapturePlan = (schema: TrainerSchema): TrainerCaptureSte
       continue;
     }
     for (const param of schema.params) {
-      if (param.id === schema.primaryParamId) {
+      if (param.id === schema.primaryParamId || isSeparateCommandParam(param)) {
         continue;
       }
       const constraint = constraintFor({
@@ -400,6 +455,7 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
       {
         id: TRAINER_PARAM_POWER_SAVING,
         label: 'Power saving',
+        isSeparateCommand: true,
         options: [
           { id: '40', label: '40%' },
           { id: '60', label: '60%' },
@@ -417,7 +473,7 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
       dry: {
         [TRAINER_PARAM_TEMP]: { kind: 'all' },
         [TRAINER_PARAM_SPEED]: { kind: 'off' },
-        [TRAINER_PARAM_POWER_SAVING]: { kind: 'all' },
+        [TRAINER_PARAM_POWER_SAVING]: { kind: 'off' },
       },
       fan_only: {
         [TRAINER_PARAM_TEMP]: { kind: 'off' },
@@ -441,6 +497,7 @@ export const createEmptyTrainerFile = (): TrainerFile => ({
 });
 
 export const assertTrainerSchema = (schema: TrainerSchema): TrainerSchema => {
+  schema = normalizeTrainerSchema(schema);
   if (!Array.isArray(schema.params) || schema.params.length === 0) {
     throw new Error('schema.params is required');
   }

@@ -8,10 +8,12 @@ import type {
   TrainerSample,
   TrainerSchema,
 } from '../types.js';
-import { listMajorityLayoutSamples } from './trainerInfer.js';
+import { listInconsistentSampleIds, listMajorityLayoutSamples } from './trainerInfer.js';
 import {
   formatTrainerStateLabel,
+  isSeparateCommandParam,
   listLegalTrainerStates,
+  listSeparateCommandStates,
   trainerStateId,
 } from './trainerPlan.js';
 
@@ -275,11 +277,16 @@ const findTemplateSample = ({
 const findMatchingSample = ({
   samples,
   paramValues,
+  unlockedParamId,
 }: {
   samples: TrainerSample[];
   paramValues: Record<string, string>;
+  unlockedParamId?: string;
 }): TrainerSample | undefined => {
   return samples.find((sample) => {
+    if (unlockedParamId && sample.unlockedParamId !== unlockedParamId) {
+      return false;
+    }
     const paramIds = new Set([...Object.keys(sample.paramValues), ...Object.keys(paramValues)]);
     return [...paramIds].every((paramId) => sample.paramValues[paramId] === paramValues[paramId]);
   });
@@ -453,7 +460,7 @@ export const generateTrainerGrid = ({
     samples: majoritySamples,
     checksumIndexes: inference.checksumIndexes,
   });
-  const cells: TrainerGeneratedCell[] = listLegalTrainerStates(schema).map((paramValues) => {
+  const frameCells: TrainerGeneratedCell[] = listLegalTrainerStates(schema).map((paramValues) => {
     const id = trainerStateId(paramValues);
     const label = formatTrainerStateLabel({ schema, paramValues });
     const templateSample = findTemplateSample({
@@ -467,31 +474,34 @@ export const generateTrainerGrid = ({
       : 'No usable captured frame to start from';
     if (unresolvedReason) {
       if (leftoverCapture) {
+          return {
+            id,
+            kind: 'frame',
+            paramValues,
+            label,
+            status: 'captured',
+            bits: leftoverCapture.bits,
+          };
+        }
         return {
           id,
+          kind: 'frame',
           paramValues,
           label,
-          status: 'captured',
-          bits: leftoverCapture.bits,
+          status: 'needs_input',
+          needsInputReason: unresolvedReason,
         };
       }
-      return {
-        id,
-        paramValues,
-        label,
-        status: 'needs_input',
-        needsInputReason: unresolvedReason,
-      };
-    }
-    if (!templateSample) {
-      return {
-        id,
-        paramValues,
-        label,
-        status: 'needs_input',
-        needsInputReason: 'No usable captured frame to start from',
-      };
-    }
+      if (!templateSample) {
+        return {
+          id,
+          kind: 'frame',
+          paramValues,
+          label,
+          status: 'needs_input',
+          needsInputReason: 'No usable captured frame to start from',
+        };
+      }
     const generated = overlayGeneratedBits({
       schema,
       inference,
@@ -502,6 +512,7 @@ export const generateTrainerGrid = ({
     if (generated.bits) {
       return {
         id,
+        kind: 'frame',
         paramValues,
         label,
         status: 'generated',
@@ -511,6 +522,7 @@ export const generateTrainerGrid = ({
     if (leftoverCapture) {
       return {
         id,
+        kind: 'frame',
         paramValues,
         label,
         status: 'captured',
@@ -519,12 +531,51 @@ export const generateTrainerGrid = ({
     }
     return {
       id,
+      kind: 'frame',
       paramValues,
       label,
       status: 'needs_input',
       needsInputReason: generated.needsInputReason ?? 'Could not generate this combo',
     };
   });
-  return { checksumKind, cells };
+  const consistentSamples = samples.filter(
+    (sample) => !listInconsistentSampleIds(samples).has(sample.id),
+  );
+  const commandCells: TrainerGeneratedCell[] = listSeparateCommandStates(schema).map((paramValues) => {
+    const id = trainerStateId(paramValues);
+    const separateParam = schema.params.find(
+      (param) => isSeparateCommandParam(param) && paramValues[param.id] !== undefined,
+    );
+    const optionId = separateParam ? paramValues[separateParam.id] : undefined;
+    const optionLabel =
+      separateParam?.options.find((option) => option.id === optionId)?.label ?? optionId ?? '';
+    const label = `${separateParam?.label ?? 'Command'} ${optionLabel} (separate command)`;
+    const capturedSample = separateParam
+      ? findMatchingSample({
+          samples: consistentSamples,
+          paramValues,
+          unlockedParamId: separateParam.id,
+        })
+      : undefined;
+    if (capturedSample) {
+      return {
+        id,
+        kind: 'command',
+        paramValues,
+        label,
+        status: 'captured',
+        bits: capturedSample.bits,
+      };
+    }
+    return {
+      id,
+      kind: 'command',
+      paramValues,
+      label,
+      status: 'needs_input',
+      needsInputReason: `${separateParam?.label ?? 'This command'} is sent on its own packet — capture this option`,
+    };
+  });
+  return { checksumKind, cells: [...frameCells, ...commandCells] };
 };
 

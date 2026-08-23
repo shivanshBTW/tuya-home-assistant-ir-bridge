@@ -229,6 +229,7 @@ export interface TrainerParamAPI {
   id: string;
   label: string;
   options: TrainerParamOptionAPI[];
+  isSeparateCommand?: boolean;
 }
 
 export interface TrainerConstraintAPI {
@@ -280,9 +281,11 @@ export interface TrainerInferenceAPI {
 
 export type TrainerChecksumKindAPI = 'nibble_sum' | 'nibble_xor' | 'unknown';
 export type TrainerGeneratedStatusAPI = 'generated' | 'captured' | 'needs_input';
+export type TrainerGeneratedKindAPI = 'frame' | 'command';
 
 export interface TrainerGeneratedCellAPI {
   id: string;
+  kind: TrainerGeneratedKindAPI;
   paramValues: Record<string, string>;
   label: string;
   status: TrainerGeneratedStatusAPI;
