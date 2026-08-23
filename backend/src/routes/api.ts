@@ -6,7 +6,7 @@ import type { JsonStore } from '../store/jsonStore.js';
 import { DEVICE_TEMPLATES, getTemplateById } from '../templates/deviceTemplates.js';
 import { TuyaCloudClient } from '../tuya/cloudClient.js';
 import { exportCatalog } from '../tuya/exportCatalog.js';
-import { compareIrPulses, decodeIrCode } from '../tuya/irDecode.js';
+import { compareIrBits, compareIrPulses, decodeIrCode } from '../tuya/irDecode.js';
 import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
 import { listenForLocalIrCode } from '../tuya/localStudy.js';
@@ -342,6 +342,7 @@ export const registerRoutes = ({
       left: { ...leftCapture, decode: left },
       right: { ...rightCapture, decode: right },
       diffs: compareIrPulses({ left: left.pulses, right: right.pulses }),
+      bitDiffs: compareIrBits({ left: left.bits, right: right.bits }),
     };
   });
 };

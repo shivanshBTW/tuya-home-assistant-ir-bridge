@@ -10,6 +10,8 @@ import type { useStudyPage } from './useStudyPage';
 
 type Props = ReturnType<typeof useStudyPage>;
 
+const formatBits = (bits: string): string => bits.match(/.{1,4}/g)?.join(' ') ?? bits;
+
 const captureOptionLabel = ({
   receivedAt,
   pulseCount,
@@ -32,6 +34,7 @@ export const StudyPage: FC<Props> = ({
   selectedCapture,
   compareCaptureId,
   diffs,
+  bitDiffs,
   onListen,
   onSave,
   onReplay,
@@ -49,7 +52,7 @@ export const StudyPage: FC<Props> = ({
       <Typography variant="h4">Study</Typography>
       <Typography color="text.secondary">
         Local-only reader. Arm the blaster, press one LG key, then name and replay the frame. The
-        log never clears.
+        log never clears. Raw µs always jitter — compare Bits, not pulse widths.
       </Typography>
 
       <Paper sx={{ p: 2 }}>
@@ -137,6 +140,36 @@ export const StudyPage: FC<Props> = ({
                 {selectedCapture.decode.pulseCount} pulses · {selectedCapture.code.length} raw chars
               </Typography>
               <TextField
+                label="Bits (grouped by 4; temp is usually nibble 5)"
+                value={formatBits(selectedCapture.decode.bits ?? '')}
+                multiline
+                minRows={2}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    sx: {
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 13,
+                    },
+                  },
+                }}
+              />
+              <TextField
+                label="Symbols (S short / L long / M header / H trailer)"
+                value={selectedCapture.decode.symbols ?? ''}
+                multiline
+                minRows={2}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    sx: {
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 13,
+                    },
+                  },
+                }}
+              />
+              <TextField
                 label="Raw payload"
                 value={selectedCapture.code}
                 multiline
@@ -215,9 +248,28 @@ export const StudyPage: FC<Props> = ({
                     </MenuItem>
                   ))}
               </TextField>
+              {bitDiffs.length > 0 && (
+                <TextField
+                  label={`Bit diffs (${bitDiffs.length}) — use this for temp`}
+                  value={bitDiffs
+                    .map((diff) => `${diff.index}: ${diff.left ?? '—'} → ${diff.right ?? '—'}`)
+                    .join('\n')}
+                  multiline
+                  minRows={4}
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      sx: {
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        fontSize: 13,
+                      },
+                    },
+                  }}
+                />
+              )}
               {diffs.length > 0 && (
                 <TextField
-                  label={`Pulse diffs (${diffs.length})`}
+                  label={`Symbol diffs (${diffs.length})`}
                   value={diffs
                     .map((diff) => `${diff.index}: ${diff.left ?? '—'} → ${diff.right ?? '—'}`)
                     .join('\n')}

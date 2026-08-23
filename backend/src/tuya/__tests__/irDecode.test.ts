@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   base64ToPulses,
+  compareIrBits,
   compareIrPulses,
   decodeIrCode,
   hexToPulses,
   pulsesToBase64,
+  pulsesToBits,
   pulsesToHex,
 } from '../irDecode.js';
 
@@ -33,20 +35,62 @@ describe('decodeIrCode', () => {
     assert.equal(decode.kind, 'symbol_key');
     assert.deepEqual(decode.pulses, []);
     assert.equal(decode.pulseCount, 0);
+    assert.equal(decode.symbols, '');
+    assert.equal(decode.bits, '');
   });
 });
 
 describe('compareIrPulses', () => {
-  it('lists indexes where two captures differ', () => {
+  it('ignores jitter inside the same short or long bucket', () => {
     assert.deepEqual(
       compareIrPulses({
-        left: [100, 200, 300],
-        right: [100, 250, 300, 400],
+        left: [512, 1576, 512, 512],
+        right: [491, 1568, 544, 544],
+      }),
+      [],
+    );
+  });
+
+  it('lists indexes where short vs long actually changes', () => {
+    assert.deepEqual(
+      compareIrPulses({
+        left: [512, 512, 512, 1576],
+        right: [491, 1568, 544, 544],
       }),
       [
-        { index: 1, left: 200, right: 250 },
-        { index: 3, right: 400 },
+        { index: 1, left: 512, right: 1568 },
+        { index: 3, left: 1576, right: 544 },
       ],
     );
+  });
+});
+
+describe('pulsesToBits', () => {
+  it('reads LG-style temp bits after snapping jitter', () => {
+    const cool27 = [
+      3063, 9841, 512, 1576, 512, 512, 512, 563, 512, 512, 512, 1576, 512, 512, 512, 512, 512, 512,
+      512, 512, 512, 512, 512, 512, 512, 512, 512, 1576, 512, 512, 512, 512, 512, 512, 512, 1576,
+      512, 1576, 512, 512, 512, 512, 512, 512, 512, 1576, 512, 512, 512, 563, 512, 1576, 512, 512,
+      512, 512, 512, 512, 512, 30000,
+    ];
+    const cool26 = [
+      2999, 9902, 491, 1568, 491, 544, 491, 544, 491, 544, 491, 1568, 491, 544, 491, 544, 491, 544,
+      491, 544, 491, 544, 491, 544, 491, 544, 491, 1568, 491, 544, 491, 544, 544, 491, 544, 1568,
+      491, 544, 491, 1568, 491, 1568, 491, 544, 491, 1568, 491, 544, 491, 544, 491, 544, 491, 1568,
+      491, 1568, 544, 1568, 544, 30000,
+    ];
+    assert.equal(pulsesToBits(cool27), '1000100000001000110001001000');
+    assert.equal(pulsesToBits(cool26), '1000100000001000101101000111');
+    assert.equal(pulsesToBits(cool27).slice(16, 20), '1100');
+    assert.equal(pulsesToBits(cool26).slice(16, 20), '1011');
+    assert.deepEqual(compareIrBits({ left: pulsesToBits(cool27), right: pulsesToBits(cool26) }), [
+      { index: 17, left: '1', right: '0' },
+      { index: 18, left: '0', right: '1' },
+      { index: 19, left: '0', right: '1' },
+      { index: 24, left: '1', right: '0' },
+      { index: 25, left: '0', right: '1' },
+      { index: 26, left: '0', right: '1' },
+      { index: 27, left: '0', right: '1' },
+    ]);
   });
 });

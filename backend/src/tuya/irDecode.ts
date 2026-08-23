@@ -1,7 +1,81 @@
-import type { IrDecode, IrPulseDiff } from '../types.js';
+import type { IrBitDiff, IrDecode, IrPulseDiff } from '../types.js';
 import { classifyCatalogIrCode, type CatalogIrCodeKind } from './irFrame.js';
 
 const LEARNED_KEY1_PREFIX = '1';
+export const IR_LONG_MIN_US = 1000;
+export const IR_HEADER_MIN_US = 2000;
+export const IR_TRAILER_MIN_US = 8000;
+
+export type IrPulseSymbol = 'S' | 'L' | 'M' | 'H';
+
+export const quantizeIrPulseUs = (pulseUs: number): IrPulseSymbol => {
+  if (pulseUs >= IR_TRAILER_MIN_US) {
+    return 'H';
+  }
+  if (pulseUs >= IR_HEADER_MIN_US) {
+    return 'M';
+  }
+  if (pulseUs >= IR_LONG_MIN_US) {
+    return 'L';
+  }
+  return 'S';
+};
+
+export const pulsesToSymbols = (pulses: number[]): string => {
+  return pulses.map(quantizeIrPulseUs).join('');
+};
+
+export const pulsesToBits = (pulses: number[]): string => {
+  let startIndex = 0;
+  while (
+    startIndex < pulses.length &&
+    (quantizeIrPulseUs(pulses[startIndex] ?? 0) === 'M' ||
+      quantizeIrPulseUs(pulses[startIndex] ?? 0) === 'H')
+  ) {
+    startIndex += 1;
+  }
+  let endIndex = pulses.length;
+  while (endIndex > startIndex && quantizeIrPulseUs(pulses[endIndex - 1] ?? 0) === 'H') {
+    endIndex -= 1;
+  }
+
+  const bits: string[] = [];
+  let pulseIndex = startIndex;
+  while (pulseIndex + 1 < endIndex) {
+    const mark = quantizeIrPulseUs(pulses[pulseIndex] ?? 0);
+    const space = quantizeIrPulseUs(pulses[pulseIndex + 1] ?? 0);
+    if (mark === 'S' && (space === 'S' || space === 'L')) {
+      bits.push(space === 'L' ? '1' : '0');
+      pulseIndex += 2;
+      continue;
+    }
+    bits.push('?');
+    pulseIndex += 1;
+  }
+  return bits.join('');
+};
+
+const decodeFromPulses = ({
+  kind,
+  pulses,
+  hex,
+  base64,
+}: {
+  kind: CatalogIrCodeKind;
+  pulses: number[];
+  hex: string;
+  base64: string;
+}): IrDecode => {
+  return {
+    kind,
+    pulses,
+    pulseCount: pulses.length,
+    hex,
+    base64,
+    symbols: pulsesToSymbols(pulses),
+    bits: pulsesToBits(pulses),
+  };
+};
 
 const readUint16Pulses = (raw: Buffer): number[] => {
   const pulses: number[] = [];
@@ -53,31 +127,28 @@ export const decodeIrCode = (code: string): IrDecode => {
   const kind: CatalogIrCodeKind = classifyCatalogIrCode(trimmedCode);
   if (kind === 'cloud_hex') {
     const pulses = hexToPulses(trimmedCode);
-    return {
+    return decodeFromPulses({
       kind,
       pulses,
-      pulseCount: pulses.length,
       hex: trimmedCode.toUpperCase(),
       base64: pulsesToBase64(pulses),
-    };
+    });
   }
   if (kind === 'lan_base64') {
     const pulses = base64ToPulses(trimmedCode);
-    return {
+    return decodeFromPulses({
       kind,
       pulses,
-      pulseCount: pulses.length,
       hex: pulsesToHex(pulses),
       base64: stripLearnedKey1Prefix(trimmedCode),
-    };
+    });
   }
-  return {
+  return decodeFromPulses({
     kind,
     pulses: [],
-    pulseCount: 0,
     hex: '',
     base64: '',
-  };
+  });
 };
 
 export const compareIrPulses = ({
@@ -89,6 +160,31 @@ export const compareIrPulses = ({
 }): IrPulseDiff[] => {
   const length = Math.max(left.length, right.length);
   const diffs: IrPulseDiff[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const leftPulse = left[index];
+    const rightPulse = right[index];
+    const leftSymbol = leftPulse === undefined ? undefined : quantizeIrPulseUs(leftPulse);
+    const rightSymbol = rightPulse === undefined ? undefined : quantizeIrPulseUs(rightPulse);
+    if (leftSymbol !== rightSymbol) {
+      diffs.push({
+        index,
+        ...(leftPulse === undefined ? {} : { left: leftPulse }),
+        ...(rightPulse === undefined ? {} : { right: rightPulse }),
+      });
+    }
+  }
+  return diffs;
+};
+
+export const compareIrBits = ({
+  left,
+  right,
+}: {
+  left: string;
+  right: string;
+}): IrBitDiff[] => {
+  const length = Math.max(left.length, right.length);
+  const diffs: IrBitDiff[] = [];
   for (let index = 0; index < length; index += 1) {
     if (left[index] !== right[index]) {
       diffs.push({

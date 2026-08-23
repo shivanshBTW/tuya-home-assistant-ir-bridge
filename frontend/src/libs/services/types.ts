@@ -123,12 +123,20 @@ export interface IrDecodeAPI {
   pulses: number[];
   hex: string;
   base64: string;
+  symbols: string;
+  bits: string;
 }
 
 export interface IrPulseDiffAPI {
   index: number;
   left?: number;
   right?: number;
+}
+
+export interface IrBitDiffAPI {
+  index: number;
+  left?: string;
+  right?: string;
 }
 
 export interface StudyCaptureAPI {
@@ -167,10 +175,12 @@ export interface StudyDiffAPI {
   left: StudyCaptureAPI;
   right: StudyCaptureAPI;
   diffs: IrPulseDiffAPI[];
+  bitDiffs: IrBitDiffAPI[];
 }
 
 export type IrDecode = IrDecodeAPI;
 export type IrPulseDiff = IrPulseDiffAPI;
+export type IrBitDiff = IrBitDiffAPI;
 export type StudyCapture = StudyCaptureAPI;
 export type StudySavedButton = StudySavedButtonAPI;
 export type StudyFile = StudyFileAPI;

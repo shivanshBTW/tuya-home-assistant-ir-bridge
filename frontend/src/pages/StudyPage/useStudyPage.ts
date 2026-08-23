@@ -25,6 +25,8 @@ const formatLogLine = ({
   code,
   hex,
   base64,
+  bits,
+  symbols,
   pulses,
   label,
 }: {
@@ -34,12 +36,16 @@ const formatLogLine = ({
   code: string;
   hex: string;
   base64: string;
+  bits: string;
+  symbols: string;
   pulses: number[];
   label?: string;
 }): string => {
   const named = label ? `  ${label}` : '';
   return [
     `--- ${receivedAt}  kind=${kind}  pulses=${pulseCount}${named} ---`,
+    `bits ${bits}`,
+    `symbols ${symbols}`,
     `code ${code}`,
     `hex ${hex}`,
     `base64 ${base64 || code}`,
@@ -79,6 +85,8 @@ export const useStudyPage = (_props: StudyPageProps) => {
         code: capture.code,
         hex: capture.decode.hex,
         base64: capture.decode.base64,
+        bits: capture.decode.bits ?? '',
+        symbols: capture.decode.symbols ?? '',
         pulses: capture.decode.pulses,
         label: labelByCaptureId[capture.id],
       }),
@@ -144,6 +152,7 @@ export const useStudyPage = (_props: StudyPageProps) => {
     selectedCapture,
     compareCaptureId,
     diffs: diffQuery.data?.diffs ?? [],
+    bitDiffs: diffQuery.data?.bitDiffs ?? [],
     onListen,
     onSave,
     onReplay: (captureId: string) => replayMutation.mutate(captureId),

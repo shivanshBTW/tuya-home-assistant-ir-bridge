@@ -103,12 +103,20 @@ export interface IrDecode {
   pulses: number[];
   hex: string;
   base64: string;
+  symbols: string;
+  bits: string;
 }
 
 export interface IrPulseDiff {
   index: number;
   left?: number;
   right?: number;
+}
+
+export interface IrBitDiff {
+  index: number;
+  left?: string;
+  right?: string;
 }
 
 export interface StudyCapture {
