@@ -186,7 +186,7 @@ describe('inferTrainerFields', () => {
   it('treats cool vs dry as a mode pair even when dry has no speed label', () => {
     const schema = createDefaultAcTrainerSchema();
     const cool = `1000100000001000100101000000`;
-    const dry = `1000100010001000100101000001`;
+    const dry = `1000100000001001100101000001`;
     const coolHigh = `1000100000001000100110001100`;
     const inference = inferTrainerFields({
       schema,
@@ -216,7 +216,75 @@ describe('inferTrainerFields', () => {
     });
     const modeField = inference.fields.find((field) => field.paramId === 'mode');
     assert.equal(modeField?.kind, 'lookup');
-    assert.ok(modeField?.bitIndexes.includes(8));
+    assert.ok(modeField?.bitIndexes.includes(15));
     assert.notEqual(modeField?.lookup.cool, modeField?.lookup.dry);
+  });
+
+  it('ignores a power-saving layout change so temp stays a 4-bit nibble', () => {
+    const schema = createDefaultAcTrainerSchema();
+    const inference = inferTrainerFields({
+      schema,
+      samples: [
+        sample({
+          id: '16',
+          receivedAt: '2026-01-01T00:00:00.000Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '16', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000000100101011',
+        }),
+        sample({
+          id: '23',
+          receivedAt: '2026-01-01T00:00:00.500Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '23', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000100000100010',
+        }),
+        sample({
+          id: '24',
+          receivedAt: '2026-01-01T00:00:01.000Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000100100100011',
+        }),
+        sample({
+          id: '30',
+          receivedAt: '2026-01-01T00:00:01.500Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '30', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000111100101001',
+        }),
+        sample({
+          id: 'low',
+          receivedAt: '2026-01-01T00:00:02.000Z',
+          unlockedParamId: 'speed',
+          paramValues: { mode: 'cool', temp: '24', speed: 'low', powerSaving: 'off' },
+          bits: '1000100000001000100100000001',
+        }),
+        sample({
+          id: 'ps',
+          receivedAt: '2026-01-01T00:00:03.000Z',
+          unlockedParamId: 'powerSaving',
+          paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: '40' },
+          bits: '1000100011000000100000000100',
+        }),
+        sample({
+          id: 'ps-off',
+          receivedAt: '2026-01-01T00:00:04.000Z',
+          unlockedParamId: 'powerSaving',
+          paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100011000000100000000100',
+        }),
+      ],
+    });
+    const tempField = inference.fields.find((field) => field.paramId === 'temp');
+    assert.deepEqual(tempField?.bitIndexes, [16, 17, 18, 19]);
+    assert.equal(tempField?.kind, 'linear');
+    assert.equal(tempField?.lookup['16'], '0001');
+    assert.equal(tempField?.lookup['24'], '1001');
+    const powerSavingField = inference.fields.find((field) => field.paramId === 'powerSaving');
+    assert.equal(powerSavingField?.kind, 'unresolved');
+    assert.ok(
+      inference.unresolved.some((reason) => reason.includes('different frame layout')),
+    );
   });
 });

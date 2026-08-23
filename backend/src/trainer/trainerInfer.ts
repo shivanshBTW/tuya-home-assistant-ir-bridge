@@ -150,6 +150,217 @@ const classifyDisabledRole = ({
   };
 };
 
+const serializeParamValues = (paramValues: Record<string, string>): string => {
+  return Object.keys(paramValues)
+    .sort()
+    .map((paramId) => `${paramId}=${paramValues[paramId]}`)
+    .join('|');
+};
+
+const LAYOUT_CHANGE_MIN_FLIPS = 8;
+const FRAME_VARIANT_BIT_INDEX = 8;
+const FRAME_VARIANT_BIT_LENGTH = 4;
+
+const majorityBitSlice = ({
+  samples,
+  startIndex,
+  bitLength,
+}: {
+  samples: TrainerSample[];
+  startIndex: number;
+  bitLength: number;
+}): string | undefined => {
+  const countBySlice = new Map<string, number>();
+  for (const sample of samples) {
+    const slice = sample.bits.slice(startIndex, startIndex + bitLength);
+    if (slice.length < bitLength) {
+      continue;
+    }
+    countBySlice.set(slice, (countBySlice.get(slice) ?? 0) + 1);
+  }
+  let majoritySlice: string | undefined;
+  let majorityCount = 0;
+  for (const [slice, count] of countBySlice) {
+    if (count > majorityCount) {
+      majoritySlice = slice;
+      majorityCount = count;
+    }
+  }
+  return majoritySlice;
+};
+
+const listOtherHeaderSampleIds = (samples: TrainerSample[]): Set<string> => {
+  const majoritySlice = majorityBitSlice({
+    samples,
+    startIndex: FRAME_VARIANT_BIT_INDEX,
+    bitLength: FRAME_VARIANT_BIT_LENGTH,
+  });
+  if (!majoritySlice) {
+    return new Set();
+  }
+  const majorityCount = samples.filter(
+    (sample) =>
+      sample.bits.slice(FRAME_VARIANT_BIT_INDEX, FRAME_VARIANT_BIT_INDEX + FRAME_VARIANT_BIT_LENGTH) ===
+      majoritySlice,
+  ).length;
+  if (majorityCount <= samples.length / 2) {
+    return new Set();
+  }
+  return new Set(
+    samples
+      .filter(
+        (sample) =>
+          sample.bits.slice(
+            FRAME_VARIANT_BIT_INDEX,
+            FRAME_VARIANT_BIT_INDEX + FRAME_VARIANT_BIT_LENGTH,
+          ) !== majoritySlice,
+      )
+      .map((sample) => sample.id),
+  );
+};
+
+const buildParamLookup = ({
+  samples,
+  paramId,
+  bitIndexes,
+  skipUnlockedParamIds,
+}: {
+  samples: TrainerSample[];
+  paramId: string;
+  bitIndexes: number[];
+  skipUnlockedParamIds?: Set<string>;
+}): Record<string, string> => {
+  const lookup: Record<string, string> = {};
+  for (const sample of samples) {
+    if (skipUnlockedParamIds?.has(sample.unlockedParamId)) {
+      continue;
+    }
+    const optionId = sample.paramValues[paramId];
+    if (optionId === undefined) {
+      continue;
+    }
+    lookup[optionId] = sliceBits(sample.bits, bitIndexes);
+  }
+  return lookup;
+};
+
+const listContiguousRuns = (bitIndexes: number[]): number[][] => {
+  const runs: number[][] = [];
+  let currentRun: number[] = [];
+  for (const bitIndex of bitIndexes) {
+    const previousIndex = currentRun.at(-1);
+    if (previousIndex === undefined || bitIndex === previousIndex + 1) {
+      currentRun.push(bitIndex);
+    } else {
+      runs.push(currentRun);
+      currentRun = [bitIndex];
+    }
+  }
+  if (currentRun.length > 0) {
+    runs.push(currentRun);
+  }
+  return runs;
+};
+
+const pickLinearBitIndexes = ({
+  samples,
+  paramId,
+  bitIndexes,
+  skipUnlockedParamIds,
+}: {
+  samples: TrainerSample[];
+  paramId: string;
+  bitIndexes: number[];
+  skipUnlockedParamIds?: Set<string>;
+}): { bitIndexes: number[]; extraChecksumIndexes: number[] } => {
+  const fullLookup = buildParamLookup({ samples, paramId, bitIndexes, skipUnlockedParamIds });
+  if (fieldKindForLookup(fullLookup) === 'linear') {
+    return { bitIndexes, extraChecksumIndexes: [] };
+  }
+  const linearRuns = listContiguousRuns(bitIndexes).filter((run) => {
+    const runLookup = buildParamLookup({ samples, paramId, bitIndexes: run, skipUnlockedParamIds });
+    const optionIds = Object.keys(runLookup);
+    const uniqueSlices = new Set(Object.values(runLookup));
+    return (
+      optionIds.length >= 3 &&
+      uniqueSlices.size === optionIds.length &&
+      fieldKindForLookup(runLookup) === 'linear'
+    );
+  });
+  const bestRun = [...linearRuns].sort((left, right) => right.length - left.length)[0];
+  if (!bestRun) {
+    return { bitIndexes, extraChecksumIndexes: [] };
+  }
+  return {
+    bitIndexes: bestRun,
+    extraChecksumIndexes: bitIndexes.filter((index) => !bestRun.includes(index)),
+  };
+};
+
+const listOtherLayoutSampleIds = (samples: TrainerSample[]): Set<string> => {
+  if (samples.length < 2) {
+    return new Set();
+  }
+  const neighborCounts = samples.map(
+    (sample) =>
+      samples.filter(
+        (other) =>
+          other.id !== sample.id &&
+          compareIrBits({ left: sample.bits, right: other.bits }).length < LAYOUT_CHANGE_MIN_FLIPS,
+      ).length,
+  );
+  const maxNeighborCount = Math.max(...neighborCounts);
+  if (maxNeighborCount === 0) {
+    return new Set();
+  }
+  const minNeighborCount = maxNeighborCount / 2;
+  return new Set(
+    samples
+      .filter((_, index) => (neighborCounts[index] ?? 0) < minNeighborCount)
+      .map((sample) => sample.id),
+  );
+};
+
+const listInconsistentSampleIds = (samples: TrainerSample[]): Set<string> => {
+  const samplesByParamValues = new Map<string, TrainerSample[]>();
+  for (const sample of samples) {
+    const groupKey = serializeParamValues(sample.paramValues);
+    const group = samplesByParamValues.get(groupKey) ?? [];
+    group.push(sample);
+    samplesByParamValues.set(groupKey, group);
+  }
+  const inconsistentSampleIds = new Set<string>();
+  for (const group of samplesByParamValues.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    const countByBits = new Map<string, number>();
+    for (const sample of group) {
+      countByBits.set(sample.bits, (countByBits.get(sample.bits) ?? 0) + 1);
+    }
+    const canonicalSample = [...group].sort((left, right) => {
+      const countDelta = (countByBits.get(right.bits) ?? 0) - (countByBits.get(left.bits) ?? 0);
+      if (countDelta !== 0) {
+        return countDelta;
+      }
+      return left.receivedAt.localeCompare(right.receivedAt);
+    })[0];
+    if (!canonicalSample) {
+      continue;
+    }
+    for (const sample of group) {
+      if (sample.id === canonicalSample.id) {
+        continue;
+      }
+      const flipCount = compareIrBits({ left: sample.bits, right: canonicalSample.bits }).length;
+      if (flipCount >= LAYOUT_CHANGE_MIN_FLIPS) {
+        inconsistentSampleIds.add(sample.id);
+      }
+    }
+  }
+  return inconsistentSampleIds;
+};
+
 export const inferTrainerFields = ({
   schema,
   samples,
@@ -157,10 +368,37 @@ export const inferTrainerFields = ({
   schema: TrainerSchema;
   samples: TrainerSample[];
 }): TrainerInference => {
-  const usableSamples = samples.filter((sample) => sample.bits && !sample.bits.includes('?'));
+  const decodedSamples = samples.filter((sample) => sample.bits && !sample.bits.includes('?'));
+  const inconsistentSampleIds = listInconsistentSampleIds(decodedSamples);
+  const consistentSamples = decodedSamples.filter((sample) => !inconsistentSampleIds.has(sample.id));
+  const otherLayoutSampleIds = new Set([
+    ...listOtherLayoutSampleIds(consistentSamples),
+    ...listOtherHeaderSampleIds(consistentSamples),
+  ]);
+  const usableSamples = consistentSamples.filter((sample) => !otherLayoutSampleIds.has(sample.id));
   const flipsByParamId: Record<string, Set<number>> = {};
   const leftoverFlipsByParamId: Record<string, Set<number>> = {};
+  const layoutChangeParamIds = new Set<string>();
   const unresolved: string[] = [];
+  if (inconsistentSampleIds.size > 0) {
+    unresolved.push(
+      `ignored ${inconsistentSampleIds.size} sample(s) with the same labels as another capture but a different frame`,
+    );
+  }
+  if (otherLayoutSampleIds.size > 0) {
+    unresolved.push(
+      `ignored ${otherLayoutSampleIds.size} sample(s) that use a different frame layout`,
+    );
+    for (const param of schema.params) {
+      const hasMajorityUnlock = usableSamples.some((sample) => sample.unlockedParamId === param.id);
+      const hasOtherLayoutUnlock = consistentSamples.some(
+        (sample) => otherLayoutSampleIds.has(sample.id) && sample.unlockedParamId === param.id,
+      );
+      if (hasOtherLayoutUnlock && !hasMajorityUnlock) {
+        layoutChangeParamIds.add(param.id);
+      }
+    }
+  }
 
   const addFlips = ({
     paramId,
@@ -197,6 +435,12 @@ export const inferTrainerFields = ({
         continue;
       }
       const bitDiffs = compareIrBits({ left: leftSample.bits, right: rightSample.bits });
+      if (bitDiffs.length >= LAYOUT_CHANGE_MIN_FLIPS) {
+        if (hasSameParamKeys({ left: leftSample.paramValues, right: rightSample.paramValues })) {
+          layoutChangeParamIds.add(paramId);
+        }
+        continue;
+      }
       if (hasSameParamKeys({ left: leftSample.paramValues, right: rightSample.paramValues })) {
         addFlips({ paramId, bitDiffs, target: flipsByParamId });
         continue;
@@ -233,9 +477,11 @@ export const inferTrainerFields = ({
     const bitIndexes = rawIndexes.filter((index) => !checksumSet.has(index));
     const hasAxisPairs = (flipsByParamId[param.id]?.size ?? 0) > 0;
     if (bitIndexes.length === 0) {
-      const reason = hasAxisPairs
-        ? 'No unique bits after removing checksum'
-        : 'No pair that changes only this param';
+      const reason = layoutChangeParamIds.has(param.id)
+        ? 'changes too many bits to be one field (likely a different frame layout)'
+        : hasAxisPairs
+          ? 'No unique bits after removing checksum'
+          : 'No pair that changes only this param';
       unresolved.push(`${param.id}: ${reason}`);
       return {
         paramId: param.id,
@@ -245,14 +491,12 @@ export const inferTrainerFields = ({
         unresolvedReason: reason,
       };
     }
-    const lookup: Record<string, string> = {};
-    for (const sample of usableSamples) {
-      const optionId = sample.paramValues[param.id];
-      if (optionId === undefined) {
-        continue;
-      }
-      lookup[optionId] = sliceBits(sample.bits, bitIndexes);
-    }
+    const lookup = buildParamLookup({
+      samples: usableSamples,
+      paramId: param.id,
+      bitIndexes,
+      skipUnlockedParamIds: layoutChangeParamIds,
+    });
     return {
       paramId: param.id,
       bitIndexes,
@@ -260,6 +504,31 @@ export const inferTrainerFields = ({
       lookup,
     };
   });
+  for (const field of fields) {
+    if (field.kind === 'unresolved') {
+      continue;
+    }
+    const shrunk = pickLinearBitIndexes({
+      samples: usableSamples,
+      paramId: field.paramId,
+      bitIndexes: field.bitIndexes,
+      skipUnlockedParamIds: layoutChangeParamIds,
+    });
+    if (shrunk.extraChecksumIndexes.length === 0) {
+      continue;
+    }
+    for (const bitIndex of shrunk.extraChecksumIndexes) {
+      checksumSet.add(bitIndex);
+    }
+    field.bitIndexes = shrunk.bitIndexes;
+    field.lookup = buildParamLookup({
+      samples: usableSamples,
+      paramId: field.paramId,
+      bitIndexes: field.bitIndexes,
+      skipUnlockedParamIds: layoutChangeParamIds,
+    });
+    field.kind = fieldKindForLookup(field.lookup);
+  }
   const checksumIndexes = [...checksumSet].sort((left, right) => left - right);
 
   const disabledNotes: TrainerDisabledNote[] = [];
