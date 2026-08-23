@@ -343,8 +343,10 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
         id: TRAINER_PARAM_POWER_SAVING,
         label: 'Power saving',
         options: [
-          { id: 'off', label: 'Off' },
-          { id: 'on', label: 'On' },
+          { id: '40', label: '40%' },
+          { id: '60', label: '60%' },
+          { id: '80', label: '80%' },
+          { id: '100', label: 'Off' },
         ],
       },
     ],
