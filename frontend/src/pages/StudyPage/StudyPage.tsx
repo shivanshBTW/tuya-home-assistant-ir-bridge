@@ -58,11 +58,16 @@ export const StudyPage: FC<Props> = ({
             {isListenPending ? 'Listening… point the LG remote' : 'Listen'}
           </Button>
           <TextField
-            label="Capture log"
+            label="Capture log (full payload)"
             value={isLoading ? 'Loading study log…' : logText}
             multiline
-            minRows={8}
-            slotProps={{ input: { readOnly: true } }}
+            minRows={12}
+            slotProps={{
+              input: {
+                readOnly: true,
+                sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13 },
+              },
+            }}
           />
           <Button
             variant="outlined"
@@ -128,29 +133,68 @@ export const StudyPage: FC<Props> = ({
           {selectedCapture ? (
             <>
               <Typography>
-                Kind <code>{selectedCapture.decode.kind}</code> · {selectedCapture.decode.pulseCount}{' '}
-                pulses
+                Kind <code>{selectedCapture.decode.kind}</code> ·{' '}
+                {selectedCapture.decode.pulseCount} pulses · {selectedCapture.code.length} raw chars
               </Typography>
+              <TextField
+                label="Raw payload"
+                value={selectedCapture.code}
+                multiline
+                minRows={4}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    sx: {
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 13,
+                    },
+                  },
+                }}
+              />
               <TextField
                 label="Hex"
                 value={selectedCapture.decode.hex}
                 multiline
-                minRows={2}
-                slotProps={{ input: { readOnly: true } }}
+                minRows={4}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    sx: {
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 13,
+                    },
+                  },
+                }}
               />
               <TextField
                 label="Base64"
                 value={selectedCapture.decode.base64 || selectedCapture.code}
                 multiline
-                minRows={2}
-                slotProps={{ input: { readOnly: true } }}
+                minRows={4}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    sx: {
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 13,
+                    },
+                  },
+                }}
               />
               <TextField
                 label="Pulses (µs)"
                 value={selectedCapture.decode.pulses.join(' ')}
                 multiline
-                minRows={3}
-                slotProps={{ input: { readOnly: true } }}
+                minRows={6}
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    sx: {
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontSize: 13,
+                    },
+                  },
+                }}
               />
               <TextField
                 select
@@ -175,14 +219,19 @@ export const StudyPage: FC<Props> = ({
                 <TextField
                   label={`Pulse diffs (${diffs.length})`}
                   value={diffs
-                    .map(
-                      (diff) =>
-                        `${diff.index}: ${diff.left ?? '—'} → ${diff.right ?? '—'}`,
-                    )
+                    .map((diff) => `${diff.index}: ${diff.left ?? '—'} → ${diff.right ?? '—'}`)
                     .join('\n')}
                   multiline
                   minRows={4}
-                  slotProps={{ input: { readOnly: true } }}
+                  slotProps={{
+                    input: {
+                      readOnly: true,
+                      sx: {
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                        fontSize: 13,
+                      },
+                    },
+                  }}
                 />
               )}
             </>

@@ -21,17 +21,30 @@ interface SaveCaptureForm {
 const formatLogLine = ({
   receivedAt,
   pulseCount,
+  kind,
   code,
+  hex,
+  base64,
+  pulses,
   label,
 }: {
   receivedAt: string;
   pulseCount: number;
+  kind: string;
   code: string;
+  hex: string;
+  base64: string;
+  pulses: number[];
   label?: string;
 }): string => {
-  const preview = code.length > 24 ? `${code.slice(0, 24)}…` : code;
   const named = label ? `  ${label}` : '';
-  return `${receivedAt}  pulses=${pulseCount}  ${preview}${named}`;
+  return [
+    `--- ${receivedAt}  kind=${kind}  pulses=${pulseCount}${named} ---`,
+    `code ${code}`,
+    `hex ${hex}`,
+    `base64 ${base64 || code}`,
+    `pulses ${pulses.join(' ')}`,
+  ].join('\n');
 };
 
 export const useStudyPage = (_props: StudyPageProps) => {
@@ -62,7 +75,11 @@ export const useStudyPage = (_props: StudyPageProps) => {
       formatLogLine({
         receivedAt: capture.receivedAt,
         pulseCount: capture.pulseCount,
+        kind: capture.decode.kind,
         code: capture.code,
+        hex: capture.decode.hex,
+        base64: capture.decode.base64,
+        pulses: capture.decode.pulses,
         label: labelByCaptureId[capture.id],
       }),
     )
@@ -75,7 +92,9 @@ export const useStudyPage = (_props: StudyPageProps) => {
         leftCaptureId: selectedCaptureId,
         rightCaptureId: compareCaptureId,
       }),
-    enabled: Boolean(selectedCaptureId && compareCaptureId && selectedCaptureId !== compareCaptureId),
+    enabled: Boolean(
+      selectedCaptureId && compareCaptureId && selectedCaptureId !== compareCaptureId,
+    ),
   });
 
   const listenMutation = useMutation({
