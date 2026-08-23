@@ -60,9 +60,9 @@ export const useStudyPage = (_props: StudyPageProps) => {
     queryFn: fetchStudy,
   });
 
-  const log = useMemo(() => studyQuery.data?.log ?? [], [studyQuery.data?.log]);
+  const log = useMemo(() => [...(studyQuery.data?.log ?? [])].reverse(), [studyQuery.data?.log]);
   const savedButtons = useMemo(
-    () => studyQuery.data?.savedButtons ?? [],
+    () => [...(studyQuery.data?.savedButtons ?? [])].reverse(),
     [studyQuery.data?.savedButtons],
   );
   const selectedCapture = log.find((capture) => capture.id === selectedCaptureId);
