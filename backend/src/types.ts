@@ -233,6 +233,23 @@ export interface TrainerInference {
   unresolved: string[];
 }
 
+export type TrainerChecksumKind = 'nibble_sum' | 'nibble_xor' | 'unknown';
+export type TrainerGeneratedStatus = 'generated' | 'captured' | 'needs_input';
+
+export interface TrainerGeneratedCell {
+  id: string;
+  paramValues: Record<string, string>;
+  label: string;
+  status: TrainerGeneratedStatus;
+  bits?: string;
+  needsInputReason?: string;
+}
+
+export interface TrainerGeneration {
+  checksumKind: TrainerChecksumKind;
+  cells: TrainerGeneratedCell[];
+}
+
 export interface TrainerCaptureStep {
   id: string;
   kind: TrainerCaptureKind;
@@ -248,4 +265,5 @@ export interface TrainerFile {
   schema: TrainerSchema;
   samples: TrainerSample[];
   inference?: TrainerInference;
+  generation?: TrainerGeneration;
 }

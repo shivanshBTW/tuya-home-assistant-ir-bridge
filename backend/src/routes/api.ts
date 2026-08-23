@@ -17,6 +17,7 @@ import {
 } from '../tuya/irDecode.js';
 import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
+import { generateTrainerGrid } from '../trainer/trainerGenerate.js';
 import { inferTrainerFields } from '../trainer/trainerInfer.js';
 import { assertTrainerSchema } from '../trainer/trainerPlan.js';
 import { toTrainerResponse } from '../trainer/trainerResponse.js';
@@ -440,6 +441,7 @@ export const registerRoutes = ({
       ...trainer,
       schema,
       inference: undefined,
+      generation: undefined,
     });
     return toTrainerResponse(await jsonStore.readTrainer());
   });
@@ -476,6 +478,7 @@ export const registerRoutes = ({
         sample,
       });
       trainer.inference = inferTrainerFields(trainer);
+      trainer.generation = generateTrainerGrid(trainer);
       await jsonStore.writeTrainer(trainer);
       return toTrainerResponse(await jsonStore.readTrainer());
     } finally {
@@ -505,6 +508,7 @@ export const registerRoutes = ({
       sample,
     });
     trainer.inference = inferTrainerFields(trainer);
+    trainer.generation = generateTrainerGrid(trainer);
     await jsonStore.writeTrainer(trainer);
     return toTrainerResponse(await jsonStore.readTrainer());
   });
@@ -512,7 +516,48 @@ export const registerRoutes = ({
   app.post('/api/trainer/infer', async () => {
     const trainer = await jsonStore.readTrainer();
     trainer.inference = inferTrainerFields(trainer);
+    trainer.generation = generateTrainerGrid(trainer);
     await jsonStore.writeTrainer(trainer);
     return toTrainerResponse(await jsonStore.readTrainer());
+  });
+
+  app.post('/api/trainer/generate', async () => {
+    const trainer = await jsonStore.readTrainer();
+    trainer.inference = inferTrainerFields(trainer);
+    trainer.generation = generateTrainerGrid(trainer);
+    await jsonStore.writeTrainer(trainer);
+    return toTrainerResponse(await jsonStore.readTrainer());
+  });
+
+  app.post('/api/trainer/fire', async (request) => {
+    if (isStudyListenInProgress) {
+      throw new Error('Wait for study listen to finish before firing bits');
+    }
+    const body = (request.body ?? {}) as { bits?: string; cellId?: string };
+    const trainer = await jsonStore.readTrainer();
+    const generation = trainer.inference ? generateTrainerGrid(trainer) : trainer.generation;
+    const cellBits =
+      typeof body.cellId === 'string'
+        ? generation?.cells.find((cell) => cell.id === body.cellId)?.bits
+        : undefined;
+    const rawBits = typeof body.bits === 'string' ? body.bits : cellBits;
+    if (!rawBits) {
+      throw new Error('bits or a generated cellId is required');
+    }
+    const compactBits = parseIrBitString(rawBits);
+    const pulses = bitsToPulses(compactBits);
+    const localDevice = await requireLocalBlaster();
+    await sendLocalIrCode({
+      localDevice,
+      frame: catalogCodeToLocalIrFrame(pulsesToHex(pulses)),
+    });
+    console.log(
+      `Trainer fired ${compactBits.length} bits (${pulses.length} pulses) to ${localDevice.host}`,
+    );
+    return {
+      path: SEND_PATH_LOCAL,
+      bitCount: compactBits.length,
+      pulseCount: pulses.length,
+    };
   });
 };

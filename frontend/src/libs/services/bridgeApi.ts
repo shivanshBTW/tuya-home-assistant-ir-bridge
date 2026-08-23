@@ -165,6 +165,27 @@ export const inferTrainer = async (): Promise<TrainerFile> => {
   });
 };
 
+export const generateTrainer = async (): Promise<TrainerFile> => {
+  return requestBridge<TrainerFileAPI>({
+    path: '/api/trainer/generate',
+    method: 'POST',
+  });
+};
+
+export const fireTrainerCell = async ({
+  cellId,
+  bits,
+}: {
+  cellId?: string;
+  bits?: string;
+}): Promise<{ path: string; bitCount: number; pulseCount: number }> => {
+  return requestBridge<{ path: string; bitCount: number; pulseCount: number }>({
+    path: '/api/trainer/fire',
+    method: 'POST',
+    body: { cellId, bits },
+  });
+};
+
 export const fetchStudy = async (): Promise<StudyFile> => {
   return requestBridge<StudyFileAPI>({ path: '/api/study' });
 };

@@ -361,6 +361,17 @@ const listInconsistentSampleIds = (samples: TrainerSample[]): Set<string> => {
   return inconsistentSampleIds;
 };
 
+export const listMajorityLayoutSamples = (samples: TrainerSample[]): TrainerSample[] => {
+  const decodedSamples = samples.filter((sample) => sample.bits && !sample.bits.includes('?'));
+  const inconsistentSampleIds = listInconsistentSampleIds(decodedSamples);
+  const consistentSamples = decodedSamples.filter((sample) => !inconsistentSampleIds.has(sample.id));
+  const otherLayoutSampleIds = new Set([
+    ...listOtherLayoutSampleIds(consistentSamples),
+    ...listOtherHeaderSampleIds(consistentSamples),
+  ]);
+  return consistentSamples.filter((sample) => !otherLayoutSampleIds.has(sample.id));
+};
+
 export const inferTrainerFields = ({
   schema,
   samples,
@@ -375,7 +386,7 @@ export const inferTrainerFields = ({
     ...listOtherLayoutSampleIds(consistentSamples),
     ...listOtherHeaderSampleIds(consistentSamples),
   ]);
-  const usableSamples = consistentSamples.filter((sample) => !otherLayoutSampleIds.has(sample.id));
+  const usableSamples = listMajorityLayoutSamples(samples);
   const flipsByParamId: Record<string, Set<number>> = {};
   const leftoverFlipsByParamId: Record<string, Set<number>> = {};
   const layoutChangeParamIds = new Set<string>();

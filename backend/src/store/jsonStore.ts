@@ -111,6 +111,7 @@ export class JsonStore {
         schema: parsed.schema ?? emptyTrainerFile.schema,
         samples: Array.isArray(parsed.samples) ? parsed.samples : [],
         ...(parsed.inference ? { inference: parsed.inference } : {}),
+        ...(parsed.generation ? { generation: parsed.generation } : {}),
       };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {

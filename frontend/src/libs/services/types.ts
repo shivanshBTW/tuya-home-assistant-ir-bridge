@@ -278,6 +278,23 @@ export interface TrainerInferenceAPI {
   unresolved: string[];
 }
 
+export type TrainerChecksumKindAPI = 'nibble_sum' | 'nibble_xor' | 'unknown';
+export type TrainerGeneratedStatusAPI = 'generated' | 'captured' | 'needs_input';
+
+export interface TrainerGeneratedCellAPI {
+  id: string;
+  paramValues: Record<string, string>;
+  label: string;
+  status: TrainerGeneratedStatusAPI;
+  bits?: string;
+  needsInputReason?: string;
+}
+
+export interface TrainerGenerationAPI {
+  checksumKind: TrainerChecksumKindAPI;
+  cells: TrainerGeneratedCellAPI[];
+}
+
 export interface TrainerCaptureStepAPI {
   id: string;
   kind: TrainerCaptureKindAPI;
@@ -293,6 +310,7 @@ export interface TrainerFileAPI {
   schema: TrainerSchemaAPI;
   samples: TrainerSampleAPI[];
   inference?: TrainerInferenceAPI;
+  generation?: TrainerGenerationAPI;
   capturePlan: TrainerCaptureStepAPI[];
 }
 
@@ -300,5 +318,7 @@ export type TrainerConstraint = TrainerConstraintAPI;
 export type TrainerSchema = TrainerSchemaAPI;
 export type TrainerSample = TrainerSampleAPI;
 export type TrainerInference = TrainerInferenceAPI;
+export type TrainerGeneratedCell = TrainerGeneratedCellAPI;
+export type TrainerGeneration = TrainerGenerationAPI;
 export type TrainerCaptureStep = TrainerCaptureStepAPI;
 export type TrainerFile = TrainerFileAPI;

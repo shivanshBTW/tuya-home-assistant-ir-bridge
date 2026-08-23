@@ -3,12 +3,18 @@ import { toast } from 'material-react-toastify';
 import { useMemo, useState } from 'react';
 import {
   fetchTrainer,
+  fireTrainerCell,
+  generateTrainer,
   inferTrainer,
   listenTrainerSample,
   saveTrainerSchema,
   submitTrainerTextSample,
 } from '../../libs/services/bridgeApi';
-import type { TrainerCaptureStep, TrainerSchema } from '../../libs/services/types';
+import type {
+  TrainerCaptureStep,
+  TrainerGeneratedCell,
+  TrainerSchema,
+} from '../../libs/services/types';
 import type { TrainerPageProps } from '.';
 
 const trainerStepKey = (step: TrainerCaptureStep): string => {
@@ -43,8 +49,12 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
   });
   const [schemaDraft, setSchemaDraft] = useState<TrainerSchema | undefined>(undefined);
   const [pasteByStepId, setPasteByStepId] = useState<Record<string, string>>({});
+  const [pasteByCellId, setPasteByCellId] = useState<Record<string, string>>({});
+  const [generateFilter, setGenerateFilter] = useState<'ready' | 'needs_input' | 'all'>('ready');
+  const [generateModeId, setGenerateModeId] = useState('');
   const schema = schemaDraft ?? trainerQuery.data?.schema;
   const inference = trainerQuery.data?.inference;
+  const generation = trainerQuery.data?.generation;
   const sampleByStepId = useMemo(() => {
     const samples = trainerQuery.data?.samples ?? [];
     const capturePlan = trainerQuery.data?.capturePlan ?? [];
@@ -95,6 +105,46 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const generateMutation = useMutation({
+    mutationFn: generateTrainer,
+    onSuccess: async (result) => {
+      toast.success('Generated ready combos');
+      queryClient.setQueryData(['trainer'], result);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const fireMutation = useMutation({
+    mutationFn: fireTrainerCell,
+    onSuccess: async () => {
+      toast.success('Sent generated frame');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const unlockedParamIdForCell = (cell: TrainerGeneratedCell): string => {
+    const unresolvedParamId = inference?.fields.find(
+      (field) => field.kind === 'unresolved' && cell.paramValues[field.paramId],
+    )?.paramId;
+    return unresolvedParamId ?? schema?.primaryParamId ?? 'mode';
+  };
+
+  const visibleGenerateCells = useMemo(() => {
+    const cells = generation?.cells ?? [];
+    return cells.filter((cell) => {
+      if (generateModeId && cell.paramValues[schema?.primaryParamId ?? 'mode'] !== generateModeId) {
+        return false;
+      }
+      if (generateFilter === 'ready') {
+        return Boolean(cell.bits);
+      }
+      if (generateFilter === 'needs_input') {
+        return cell.status === 'needs_input';
+      }
+      return true;
+    });
+  }, [generateFilter, generateModeId, generation?.cells, schema?.primaryParamId]);
+
   return {
     schema,
     onSchemaChange: setSchemaDraft,
@@ -102,7 +152,12 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     sampleByStepId,
     nextStepId: nextStep ? trainerStepKey(nextStep) : undefined,
     inference,
+    generation,
+    visibleGenerateCells,
+    generateFilter,
+    generateModeId,
     pasteByStepId,
+    pasteByCellId,
     onPasteChange: (stepId: string, text: string) => {
       setPasteByStepId((current) => ({ ...current, [stepId]: text }));
     },
@@ -127,11 +182,37 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
       });
     },
     onInfer: () => inferMutation.mutate(),
+    onGenerate: () => generateMutation.mutate(),
+    onGenerateFilterChange: setGenerateFilter,
+    onGenerateModeChange: setGenerateModeId,
+    onPasteCellChange: (cellId: string, text: string) => {
+      setPasteByCellId((current) => ({ ...current, [cellId]: text }));
+    },
+    onFireCell: (cell: TrainerGeneratedCell) => {
+      fireMutation.mutate({ cellId: cell.id, bits: cell.bits });
+    },
+    onListenCell: (cell: TrainerGeneratedCell) => {
+      toast.info('Point the remote at the blaster');
+      listenMutation.mutate({
+        paramValues: cell.paramValues,
+        unlockedParamId: unlockedParamIdForCell(cell),
+      });
+    },
+    onSubmitCellText: (cell: TrainerGeneratedCell) => {
+      const text = pasteByCellId[cell.id]?.trim() ?? '';
+      textMutation.mutate({
+        paramValues: cell.paramValues,
+        unlockedParamId: unlockedParamIdForCell(cell),
+        text,
+      });
+    },
     isLoading: trainerQuery.isLoading,
     isSavePending: saveSchemaMutation.isPending,
     isListenPending: listenMutation.isPending,
     isTextPending: textMutation.isPending,
     isInferPending: inferMutation.isPending,
+    isGeneratePending: generateMutation.isPending,
+    isFirePending: fireMutation.isPending,
     errorMessage: trainerQuery.error instanceof Error ? trainerQuery.error.message : undefined,
   };
 };

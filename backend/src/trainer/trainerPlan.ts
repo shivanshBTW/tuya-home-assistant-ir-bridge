@@ -157,6 +157,64 @@ const formatStepLabel = ({
   return `${prefix}: ${parts.join(', ')}`;
 };
 
+export const formatTrainerStateLabel = ({
+  schema,
+  paramValues,
+}: {
+  schema: TrainerSchema;
+  paramValues: Record<string, string>;
+}): string => {
+  return schema.params
+    .flatMap((param) => {
+      const optionId = paramValues[param.id];
+      if (!optionId) {
+        return [];
+      }
+      return [`${param.label} ${optionLabel(param, optionId)}`];
+    })
+    .join(', ');
+};
+
+export const trainerStateId = (paramValues: Record<string, string>): string => {
+  const pairs = Object.entries(paramValues)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([paramId, optionId]) => `${paramId}=${optionId}`)
+    .join(',');
+  return `state:${pairs}`;
+};
+
+export const listLegalTrainerStates = (schema: TrainerSchema): Record<string, string>[] => {
+  const primaryParam = findParam(schema, schema.primaryParamId);
+  const states: Record<string, string>[] = [];
+  for (const primaryOption of primaryParam.options) {
+    const secondaryParams = schema.params.filter((param) => param.id !== schema.primaryParamId);
+    const walk = (paramIndex: number, paramValues: Record<string, string>): void => {
+      if (paramIndex >= secondaryParams.length) {
+        states.push(paramValues);
+        return;
+      }
+      const param = secondaryParams[paramIndex];
+      if (!param) {
+        return;
+      }
+      const allowedOptionIds = listAllowedOptionIds({
+        schema,
+        paramId: param.id,
+        primaryOptionId: primaryOption.id,
+      });
+      if (allowedOptionIds.length === 0) {
+        walk(paramIndex + 1, paramValues);
+        return;
+      }
+      for (const optionId of allowedOptionIds) {
+        walk(paramIndex + 1, { ...paramValues, [param.id]: optionId });
+      }
+    };
+    walk(0, { [schema.primaryParamId]: primaryOption.id });
+  }
+  return states;
+};
+
 export const trainerStepId = ({
   kind,
   unlockedParamId,

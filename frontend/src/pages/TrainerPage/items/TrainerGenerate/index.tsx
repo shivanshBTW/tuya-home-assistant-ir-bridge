@@ -1,0 +1,1 @@
+export { TrainerGenerate } from './TrainerGenerate';

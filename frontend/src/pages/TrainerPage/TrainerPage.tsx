@@ -7,6 +7,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { TrainerConstraint, TrainerSchema } from '../../libs/services/types';
+import { TrainerGenerate } from './items/TrainerGenerate';
 import type { useTrainerPage } from './useTrainerPage';
 
 type Props = ReturnType<typeof useTrainerPage>;
@@ -55,17 +56,31 @@ export const TrainerPage: FC<Props> = ({
   sampleByStepId,
   nextStepId,
   inference,
+  generation,
+  visibleGenerateCells,
+  generateFilter,
+  generateModeId,
   pasteByStepId,
+  pasteByCellId,
   onPasteChange,
   onSaveSchema,
   onListen,
   onSubmitText,
   onInfer,
+  onGenerate,
+  onGenerateFilterChange,
+  onGenerateModeChange,
+  onPasteCellChange,
+  onFireCell,
+  onListenCell,
+  onSubmitCellText,
   isLoading,
   isSavePending,
   isListenPending,
   isTextPending,
   isInferPending,
+  isGeneratePending,
+  isFirePending,
   errorMessage,
 }) => {
   const primaryParam = schema?.params.find((param) => param.id === schema.primaryParamId);
@@ -74,8 +89,8 @@ export const TrainerPage: FC<Props> = ({
     <Stack spacing={3}>
       <Typography variant="h4">Train</Typography>
       <Typography color="text.secondary">
-        Unlock one param, cycle its options, and paste or listen. Inference maps bits; it does not
-        fire IR.
+        Unlock one param, cycle its options, then infer. Generate fills every combo we can prove.
+        Send those. Empty cells need a capture from you.
       </Typography>
 
       {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
@@ -324,6 +339,26 @@ export const TrainerPage: FC<Props> = ({
           )}
         </Stack>
       </Paper>
+
+      <TrainerGenerate
+        schema={schema}
+        generation={generation}
+        visibleGenerateCells={visibleGenerateCells}
+        generateFilter={generateFilter}
+        generateModeId={generateModeId}
+        pasteByCellId={pasteByCellId}
+        onGenerateFilterChange={onGenerateFilterChange}
+        onGenerateModeChange={onGenerateModeChange}
+        onPasteCellChange={onPasteCellChange}
+        onGenerate={onGenerate}
+        onFireCell={onFireCell}
+        onListenCell={onListenCell}
+        onSubmitCellText={onSubmitCellText}
+        isGeneratePending={isGeneratePending}
+        isFirePending={isFirePending}
+        isListenPending={isListenPending}
+        isTextPending={isTextPending}
+      />
     </Stack>
   );
 };
