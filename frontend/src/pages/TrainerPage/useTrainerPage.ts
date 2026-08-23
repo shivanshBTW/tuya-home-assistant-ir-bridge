@@ -26,7 +26,12 @@ const sampleMatchesStep = ({
   step,
   separateCommandParamIds,
 }: {
-  sample: { unlockedParamId: string; paramValues: Record<string, string>; probeIndex?: number; probeParamId?: string };
+  sample: {
+    unlockedParamId: string;
+    paramValues: Record<string, string>;
+    probeIndex?: number;
+    probeParamId?: string;
+  };
   step: TrainerCaptureStep;
   separateCommandParamIds: Set<string>;
 }): boolean => {
@@ -59,14 +64,14 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
   const [pasteByCellId, setPasteByCellId] = useState<Record<string, string>>({});
   const [generateFilter, setGenerateFilter] = useState<'ready' | 'needs_input' | 'all'>('ready');
   const [generateModeId, setGenerateModeId] = useState('');
+  const [selectedTempId, setSelectedTempId] = useState('');
+  const [selectedSpeedId, setSelectedSpeedId] = useState('');
   const schema = schemaDraft ?? trainerQuery.data?.schema;
   const inference = trainerQuery.data?.inference;
   const generation = trainerQuery.data?.generation;
   const separateCommandParamIds = useMemo(() => {
     return new Set(
-      (schema?.params ?? [])
-        .filter((param) => param.isSeparateCommand)
-        .map((param) => param.id),
+      (schema?.params ?? []).filter((param) => param.isSeparateCommand).map((param) => param.id),
     );
   }, [schema?.params]);
   const sampleByStepId = useMemo(() => {
@@ -163,6 +168,64 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
   const commandCells = useMemo(() => {
     return (generation?.cells ?? []).filter((cell) => cell.kind === 'command');
   }, [generation?.cells]);
+  const pickerModeId = generateModeId || schema?.anchorValues[schema.primaryParamId] || '';
+  const frameCells = useMemo(() => {
+    return (generation?.cells ?? []).filter((cell) => cell.kind !== 'command');
+  }, [generation?.cells]);
+  const pickerTempOptionIds = useMemo(() => {
+    return [
+      ...new Set(
+        frameCells
+          .filter((cell) => cell.paramValues[schema?.primaryParamId ?? 'mode'] === pickerModeId)
+          .map((cell) => cell.paramValues.temp)
+          .filter((optionId): optionId is string => Boolean(optionId)),
+      ),
+    ];
+  }, [frameCells, pickerModeId, schema?.primaryParamId]);
+  const pickerSpeedOptionIds = useMemo(() => {
+    return [
+      ...new Set(
+        frameCells
+          .filter((cell) => cell.paramValues[schema?.primaryParamId ?? 'mode'] === pickerModeId)
+          .map((cell) => cell.paramValues.speed)
+          .filter((optionId): optionId is string => Boolean(optionId)),
+      ),
+    ];
+  }, [frameCells, pickerModeId, schema?.primaryParamId]);
+  const effectiveTempId =
+    selectedTempId && pickerTempOptionIds.includes(selectedTempId)
+      ? selectedTempId
+      : pickerTempOptionIds.includes(schema?.anchorValues.temp ?? '')
+        ? (schema?.anchorValues.temp ?? '')
+        : (pickerTempOptionIds[0] ?? '');
+  const effectiveSpeedId =
+    selectedSpeedId && pickerSpeedOptionIds.includes(selectedSpeedId)
+      ? selectedSpeedId
+      : pickerSpeedOptionIds.includes(schema?.anchorValues.speed ?? '')
+        ? (schema?.anchorValues.speed ?? '')
+        : (pickerSpeedOptionIds[0] ?? '');
+  const selectedFrameCell = useMemo(() => {
+    return frameCells.find((cell) => {
+      if (cell.paramValues[schema?.primaryParamId ?? 'mode'] !== pickerModeId) {
+        return false;
+      }
+      if (pickerTempOptionIds.length > 0 && cell.paramValues.temp !== effectiveTempId) {
+        return false;
+      }
+      if (pickerSpeedOptionIds.length > 0 && cell.paramValues.speed !== effectiveSpeedId) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    effectiveSpeedId,
+    effectiveTempId,
+    frameCells,
+    pickerModeId,
+    pickerSpeedOptionIds.length,
+    pickerTempOptionIds.length,
+    schema?.primaryParamId,
+  ]);
 
   return {
     schema,
@@ -176,6 +239,12 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     commandCells,
     generateFilter,
     generateModeId,
+    pickerModeId,
+    pickerTempOptionIds,
+    pickerSpeedOptionIds,
+    selectedTempId: effectiveTempId,
+    selectedSpeedId: effectiveSpeedId,
+    selectedFrameCell,
     pasteByStepId,
     pasteByCellId,
     onPasteChange: (stepId: string, text: string) => {
@@ -205,6 +274,8 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     onGenerate: () => generateMutation.mutate(),
     onGenerateFilterChange: setGenerateFilter,
     onGenerateModeChange: setGenerateModeId,
+    onSelectedTempChange: setSelectedTempId,
+    onSelectedSpeedChange: setSelectedSpeedId,
     onPasteCellChange: (cellId: string, text: string) => {
       setPasteByCellId((current) => ({ ...current, [cellId]: text }));
     },
