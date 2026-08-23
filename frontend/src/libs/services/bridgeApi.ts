@@ -23,6 +23,9 @@ import type {
   StudyListenResultAPI,
   StudyReplayResult,
   StudyReplayResultAPI,
+  TrainerFile,
+  TrainerFileAPI,
+  TrainerSchema,
 } from './types';
 
 const STUDY_LISTEN_TIMEOUT_MS = 32_000;
@@ -101,6 +104,64 @@ export const fetchCatalogRemoteBits = async ({
   const query = params.toString();
   return requestBridge<CatalogRemoteBitsAPI>({
     path: query ? `/api/study/remote-bits?${query}` : '/api/study/remote-bits',
+  });
+};
+
+export const fetchTrainer = async (): Promise<TrainerFile> => {
+  return requestBridge<TrainerFileAPI>({ path: '/api/trainer' });
+};
+
+export const saveTrainerSchema = async (schema: TrainerSchema): Promise<TrainerFile> => {
+  return requestBridge<TrainerFileAPI>({
+    path: '/api/trainer',
+    method: 'PUT',
+    body: { schema },
+  });
+};
+
+export const listenTrainerSample = async ({
+  paramValues,
+  unlockedParamId,
+  probeParamId,
+  probeIndex,
+}: {
+  paramValues: Record<string, string>;
+  unlockedParamId: string;
+  probeParamId?: string;
+  probeIndex?: number;
+}): Promise<TrainerFile> => {
+  return requestBridge<TrainerFileAPI>({
+    path: '/api/trainer/listen',
+    method: 'POST',
+    timeoutMs: STUDY_LISTEN_TIMEOUT_MS,
+    body: { paramValues, unlockedParamId, probeParamId, probeIndex },
+  });
+};
+
+export const submitTrainerTextSample = async ({
+  paramValues,
+  unlockedParamId,
+  probeParamId,
+  probeIndex,
+  text,
+}: {
+  paramValues: Record<string, string>;
+  unlockedParamId: string;
+  probeParamId?: string;
+  probeIndex?: number;
+  text: string;
+}): Promise<TrainerFile> => {
+  return requestBridge<TrainerFileAPI>({
+    path: '/api/trainer/samples',
+    method: 'POST',
+    body: { paramValues, unlockedParamId, probeParamId, probeIndex, text },
+  });
+};
+
+export const inferTrainer = async (): Promise<TrainerFile> => {
+  return requestBridge<TrainerFileAPI>({
+    path: '/api/trainer/infer',
+    method: 'POST',
   });
 };
 

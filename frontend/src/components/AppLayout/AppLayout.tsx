@@ -41,6 +41,9 @@ export const AppLayout: FC<Props> = ({ children, localHost }) => {
           <Button color="inherit" component={RouterLink} to="/bits">
             Bits
           </Button>
+          <Button color="inherit" component={RouterLink} to="/train">
+            Train
+          </Button>
           <Button color="inherit" component={RouterLink} to="/settings">
             Settings
           </Button>

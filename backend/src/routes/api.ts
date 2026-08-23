@@ -17,6 +17,11 @@ import {
 } from '../tuya/irDecode.js';
 import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { prepareLocalDevice, resolveLocalBlaster, sendLocalIrCode } from '../tuya/localSend.js';
+import { inferTrainerFields } from '../trainer/trainerInfer.js';
+import { assertTrainerSchema } from '../trainer/trainerPlan.js';
+import { toTrainerResponse } from '../trainer/trainerResponse.js';
+import { upsertTrainerSample } from '../trainer/trainerSamples.js';
+import { decodeTrainerText } from '../trainer/trainerText.js';
 import { listenForLocalIrCode } from '../tuya/localStudy.js';
 import { resolveTuyaLocalHost } from '../tuya/resolveLocalHost.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
@@ -27,6 +32,8 @@ import type {
   MediaAssumedState,
   StudyCapture,
   StudyFile,
+  TrainerSample,
+  TrainerSchema,
 } from '../types.js';
 import type { MqttPublisher } from '../mqtt/mqttPublisher.js';
 
@@ -389,5 +396,123 @@ export const registerRoutes = ({
       diffs: compareIrPulses({ left: left.pulses, right: right.pulses }),
       bitDiffs: compareIrBits({ left: left.bits, right: right.bits }),
     };
+  });
+
+  const readSampleLabel = (
+    body: Record<string, unknown>,
+  ): Pick<TrainerSample, 'paramValues' | 'unlockedParamId' | 'probeParamId' | 'probeIndex'> => {
+    if (!body.paramValues || typeof body.paramValues !== 'object' || Array.isArray(body.paramValues)) {
+      throw new Error('paramValues is required');
+    }
+    const unlockedParamId =
+      typeof body.unlockedParamId === 'string' ? body.unlockedParamId.trim() : '';
+    if (!unlockedParamId) {
+      throw new Error('unlockedParamId is required');
+    }
+    const paramValues = Object.fromEntries(
+      Object.entries(body.paramValues as Record<string, unknown>).flatMap(([paramId, optionId]) =>
+        typeof optionId === 'string' ? [[paramId, optionId]] : [],
+      ),
+    );
+    const probeParamId =
+      typeof body.probeParamId === 'string' && body.probeParamId.trim() !== ''
+        ? body.probeParamId.trim()
+        : undefined;
+    const probeIndex = typeof body.probeIndex === 'number' ? body.probeIndex : undefined;
+    return {
+      paramValues,
+      unlockedParamId,
+      ...(probeParamId ? { probeParamId } : {}),
+      ...(probeIndex === undefined ? {} : { probeIndex }),
+    };
+  };
+
+  app.get('/api/trainer', async () => toTrainerResponse(await jsonStore.readTrainer()));
+
+  app.put('/api/trainer', async (request) => {
+    const body = request.body as { schema?: TrainerSchema };
+    if (!body.schema) {
+      throw new Error('schema is required');
+    }
+    const schema = assertTrainerSchema(body.schema);
+    const trainer = await jsonStore.readTrainer();
+    await jsonStore.writeTrainer({
+      ...trainer,
+      schema,
+      inference: undefined,
+    });
+    return toTrainerResponse(await jsonStore.readTrainer());
+  });
+
+  app.post('/api/trainer/listen', async (request) => {
+    request.raw.setTimeout(STUDY_ROUTE_TIMEOUT_MS);
+    if (isStudyListenInProgress) {
+      throw new Error('Study listen is already running');
+    }
+    const label = readSampleLabel((request.body ?? {}) as Record<string, unknown>);
+    isStudyListenInProgress = true;
+    try {
+      const localDevice = await requireLocalBlaster();
+      const code = await listenForLocalIrCode({
+        localDevice,
+        timeoutMs: STUDY_LISTEN_TIMEOUT_MS,
+      });
+      const decode = decodeIrCode(code);
+      if (!decode.bits || decode.bits.includes('?')) {
+        throw new Error('Learned frame did not decode to usable 0/1 bits');
+      }
+      const sample: TrainerSample = {
+        id: crypto.randomUUID(),
+        receivedAt: new Date().toISOString(),
+        source: 'remote',
+        ...label,
+        code,
+        kind: decode.kind,
+        pulseCount: decode.pulseCount,
+        bits: decode.bits,
+      };
+      const trainer = upsertTrainerSample({
+        trainer: await jsonStore.readTrainer(),
+        sample,
+      });
+      trainer.inference = inferTrainerFields(trainer);
+      await jsonStore.writeTrainer(trainer);
+      return toTrainerResponse(await jsonStore.readTrainer());
+    } finally {
+      isStudyListenInProgress = false;
+    }
+  });
+
+  app.post('/api/trainer/samples', async (request) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const label = readSampleLabel(body);
+    if (typeof body.text !== 'string') {
+      throw new Error('text is required');
+    }
+    const decoded = decodeTrainerText(body.text);
+    const sample: TrainerSample = {
+      id: crypto.randomUUID(),
+      receivedAt: new Date().toISOString(),
+      source: 'text',
+      ...label,
+      code: decoded.code,
+      kind: decoded.kind,
+      pulseCount: decoded.pulseCount,
+      bits: decoded.bits,
+    };
+    const trainer = upsertTrainerSample({
+      trainer: await jsonStore.readTrainer(),
+      sample,
+    });
+    trainer.inference = inferTrainerFields(trainer);
+    await jsonStore.writeTrainer(trainer);
+    return toTrainerResponse(await jsonStore.readTrainer());
+  });
+
+  app.post('/api/trainer/infer', async () => {
+    const trainer = await jsonStore.readTrainer();
+    trainer.inference = inferTrainerFields(trainer);
+    await jsonStore.writeTrainer(trainer);
+    return toTrainerResponse(await jsonStore.readTrainer());
   });
 };

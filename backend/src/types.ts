@@ -167,3 +167,85 @@ export interface CatalogRemoteBits {
   remoteName?: string;
   buttons: CatalogRemoteBitButton[];
 }
+
+export type TrainerConstraintKind = 'off' | 'all' | 'some';
+export type TrainerSampleSource = 'remote' | 'text';
+export type TrainerFieldKind = 'linear' | 'lookup' | 'unresolved';
+export type TrainerDisabledRole = 'constant' | 'sticky' | 'omitted' | 'active';
+export type TrainerCaptureKind = 'cycle' | 'probe';
+
+export interface TrainerParamOption {
+  id: string;
+  label: string;
+}
+
+export interface TrainerParam {
+  id: string;
+  label: string;
+  options: TrainerParamOption[];
+}
+
+export interface TrainerConstraint {
+  kind: TrainerConstraintKind;
+  optionIds?: string[];
+}
+
+export interface TrainerSchema {
+  params: TrainerParam[];
+  primaryParamId: string;
+  constraints: Record<string, Record<string, TrainerConstraint>>;
+  anchorValues: Record<string, string>;
+}
+
+export interface TrainerSample {
+  id: string;
+  receivedAt: string;
+  source: TrainerSampleSource;
+  paramValues: Record<string, string>;
+  unlockedParamId: string;
+  probeParamId?: string;
+  probeIndex?: number;
+  code: string;
+  kind: CatalogIrCodeKind;
+  pulseCount: number;
+  bits: string;
+}
+
+export interface TrainerParamField {
+  paramId: string;
+  bitIndexes: number[];
+  kind: TrainerFieldKind;
+  lookup: Record<string, string>;
+  unresolvedReason?: string;
+}
+
+export interface TrainerDisabledNote {
+  primaryOptionId: string;
+  paramId: string;
+  role: TrainerDisabledRole;
+  detail?: string;
+}
+
+export interface TrainerInference {
+  fields: TrainerParamField[];
+  checksumIndexes: number[];
+  disabledNotes: TrainerDisabledNote[];
+  unresolved: string[];
+}
+
+export interface TrainerCaptureStep {
+  id: string;
+  kind: TrainerCaptureKind;
+  unlockedParamId: string;
+  paramValues: Record<string, string>;
+  probeParamId?: string;
+  probeIndex?: number;
+  label: string;
+}
+
+export interface TrainerFile {
+  updatedAt: string;
+  schema: TrainerSchema;
+  samples: TrainerSample[];
+  inference?: TrainerInference;
+}
