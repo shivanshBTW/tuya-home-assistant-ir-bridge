@@ -71,12 +71,12 @@ export const useMapperPage = (_props: MapperPageProps) => {
   );
   const isCreatingTrainerAc = watchedTemplate === 'ac' && watchedIrSource === 'trainer';
   const isSelectedTrainerDevice = Boolean(selectedDevice && isTrainerMapping(selectedDevice));
-  const isSelectedDirectCatalogFan = Boolean(
-    selectedDevice && selectedDevice.template === 'fan' && !selectedDevice.slots.power,
+  const shouldHideSlotAssignment = isSelectedTrainerDevice;
+  const isFanTemplate =
+    selectedDevice?.template === 'fan' || (!selectedDevice && watchedTemplate === 'fan');
+  const fanCatalogRemote = remotes.find(
+    (remote) => remote.remoteId === (selectedDevice?.tuyaRemoteId || selectedRemoteId),
   );
-  const isCreatingDirectCatalogFan = !selectedDevice && watchedTemplate === 'fan';
-  const shouldHideSlotAssignment =
-    isSelectedTrainerDevice || isSelectedDirectCatalogFan || isCreatingDirectCatalogFan;
 
   const saveMutation = useMutation({
     mutationFn: upsertMappingDevice,
@@ -177,9 +177,9 @@ export const useMapperPage = (_props: MapperPageProps) => {
     watchedTemplate,
     isCreatingTrainerAc,
     isSelectedTrainerDevice,
-    isSelectedDirectCatalogFan,
-    isCreatingDirectCatalogFan,
     shouldHideSlotAssignment,
+    isFanTemplate,
+    fanCatalogRemote,
     onCreateDevice,
     onAssignSlot,
     onClearSlot,

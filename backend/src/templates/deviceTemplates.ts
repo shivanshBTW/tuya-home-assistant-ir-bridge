@@ -10,6 +10,14 @@ export const resolveMappedFanSpeedSlotId = ({
   speed: number;
 }): string => {
   const requestedSpeed = Math.min(FAN_SPEED_COUNT, Math.max(1, Math.round(speed)));
+  if (requestedSpeed >= FAN_SPEED_COUNT) {
+    if (slots.speed_6) {
+      return 'speed_6';
+    }
+    if (slots.max) {
+      return 'max';
+    }
+  }
   for (let speedNumber = requestedSpeed; speedNumber >= 1; speedNumber -= 1) {
     const slotId = `speed_${speedNumber}`;
     if (slots[slotId]) {
@@ -67,14 +75,14 @@ export const DEVICE_TEMPLATES: DeviceTemplate[] = [
     id: 'fan',
     label: 'Fan',
     slots: [
-      { id: 'power', label: 'Power', isRequired: true },
-      { id: 'speed_1', label: 'Speed 1', isRequired: true },
-      { id: 'speed_2', label: 'Speed 2', isRequired: true },
-      { id: 'speed_3', label: 'Speed 3', isRequired: true },
-      { id: 'speed_4', label: 'Speed 4', isRequired: true },
-      { id: 'speed_5', label: 'Speed 5', isRequired: true },
-      { id: 'speed_6', label: 'Speed 6', isRequired: true },
-      { id: 'max', label: 'Max', isRequired: false },
+      { id: 'power', label: 'Power', isRequired: false },
+      { id: 'speed_1', label: 'Speed 1', isRequired: false },
+      { id: 'speed_2', label: 'Speed 2', isRequired: false },
+      { id: 'speed_3', label: 'Speed 3', isRequired: false },
+      { id: 'speed_4', label: 'Speed 4', isRequired: false },
+      { id: 'speed_5', label: 'Speed 5', isRequired: false },
+      { id: 'speed_6', label: 'Speed 6 / boost', isRequired: false },
+      { id: 'max', label: 'Max / 100%', isRequired: false },
       { id: 'speed_up', label: 'Speed +', isRequired: false },
       { id: 'speed_down', label: 'Speed −', isRequired: false },
       { id: 'led', label: 'LED', isRequired: false },

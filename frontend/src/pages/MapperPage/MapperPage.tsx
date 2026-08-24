@@ -14,6 +14,7 @@ import Typography from '@mui/material/Typography';
 import { Controller } from 'react-hook-form';
 import { getButtonDisplayName } from '../../libs/buttonLabel';
 import type { useMapperPage } from './useMapperPage';
+import { catalogDefaultLabelForFanSlot } from './utils';
 
 type Props = ReturnType<typeof useMapperPage>;
 
@@ -54,9 +55,9 @@ export const MapperPage: FC<Props> = ({
   watchedTemplate,
   isCreatingTrainerAc,
   isSelectedTrainerDevice,
-  isSelectedDirectCatalogFan,
-  isCreatingDirectCatalogFan,
   shouldHideSlotAssignment,
+  isFanTemplate,
+  fanCatalogRemote,
   onCreateDevice,
   onAssignSlot,
   onClearSlot,
@@ -84,9 +85,9 @@ export const MapperPage: FC<Props> = ({
         <Typography variant="h4">Build HA remotes</Typography>
         <Typography color="text.secondary">
           Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot. Fans
-          skip slots: power and speeds 1–5 come from the catalog remote, and leftover keys become
-          Home Assistant buttons. For the trained AC, Google Home uses the climate entity (cool /
-          dry / fan, 16–30°C, low / medium / high). Power saving stays a Home Assistant select.
+          apply catalog keys by default; map a slot only to override. Boost, speed 6, max, and 100%
+          are the same button. For the trained AC, Google Home uses the climate entity (cool / dry /
+          fan, 16–30°C, low / medium / high). Power saving stays a Home Assistant select.
         </Typography>
       </Box>
 
@@ -278,16 +279,15 @@ export const MapperPage: FC<Props> = ({
               Power saving is a Home Assistant select only.
             </Alert>
           )}
-          {(isSelectedDirectCatalogFan || isCreatingDirectCatalogFan) && (
+          {isFanTemplate && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
-              No slot assignment. Power and speeds 1–5 fire the matching catalog keys. Boost, sleep,
-              timers, and learned speed +/− become Home Assistant buttons on the same device. Google
-              Home sees on/off and percentage.
+              Unmapped slots fire the catalog remote. Speed 6, max, and 100% all send boost. Sleep,
+              timers, and learned speed +/− stay Home Assistant buttons. Google Home sees on/off and
+              percentage.
             </Alert>
           )}
           {!isSelectedTrainerDevice &&
-            !isSelectedDirectCatalogFan &&
-            !isCreatingDirectCatalogFan &&
+            !isFanTemplate &&
             (selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
               <Alert severity="info" sx={{ flexShrink: 0 }}>
                 Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
@@ -297,14 +297,21 @@ export const MapperPage: FC<Props> = ({
             )}
           {shouldHideSlotAssignment ? (
             <Alert severity="success" sx={{ flexShrink: 0 }}>
-              {isSelectedTrainerDevice
-                ? 'No catalog slots to assign. MQTT will republish when you save. Expose this climate entity to Google Home from Home Assistant.'
-                : 'Catalog keys apply directly. MQTT will republish when you save. Expose the fan entity to Google Home from Home Assistant.'}
+              No catalog slots to assign. MQTT will republish when you save. Expose this climate
+              entity to Google Home from Home Assistant.
             </Alert>
           ) : (
             <Stack spacing={1} sx={paneScrollSx}>
               {(selectedTemplate?.slots ?? []).map((slot) => {
                 const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;
+                const catalogLabel = isFanTemplate
+                  ? catalogDefaultLabelForFanSlot({ remote: fanCatalogRemote, slotId: slot.id })
+                  : undefined;
+                const assignmentLabel = assignedButtonId
+                  ? buttonById[assignedButtonId]
+                  : catalogLabel
+                    ? `catalog · ${catalogLabel}`
+                    : 'unassigned';
                 return (
                   <Box key={slot.id} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                     <Button
@@ -316,7 +323,7 @@ export const MapperPage: FC<Props> = ({
                         {slot.label}
                         {slot.isRequired ? ' *' : ''}
                       </span>
-                      <span>{assignedButtonId ? buttonById[assignedButtonId] : 'unassigned'}</span>
+                      <span>{assignmentLabel}</span>
                     </Button>
                     {assignedButtonId && (
                       <Button size="small" onClick={() => onClearSlot(slot.id)}>

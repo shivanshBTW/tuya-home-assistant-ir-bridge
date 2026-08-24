@@ -2,16 +2,15 @@ import mqtt from 'mqtt';
 import type { AppConfig } from '../config.js';
 import {
   catalogFanButtonSlug,
+  catalogFanSpeedRangeMax,
   findCatalogFanExtraButton,
-  findCatalogFanPowerButton,
-  isDirectCatalogFan,
   listCatalogFanExtraButtons,
-  listCatalogFanSpeedButtons,
-  resolveCatalogFanSpeedButton,
+  normalizeRequestedFanSpeed,
+  resolveFanPowerButtonToSend,
+  resolveFanSpeedButtonToSend,
 } from '../templates/catalogFan.js';
 import {
   FAN_SPEED_COUNT,
-  resolveMappedFanSpeedSlotId,
   TV_HDMI_SOURCE_NAME,
   AC_POWER_SAVING_OPTION_BY_SLOT_ID,
   AC_POWER_SAVING_SLOT_IDS,
@@ -215,12 +214,9 @@ export class MqttPublisher {
 
     if (device.template === 'fan') {
       const catalog = await this.jsonStore.readCatalog();
-      const isDirectFan = isDirectCatalogFan(device);
-      const catalogSpeedCount = catalog
-        ? listCatalogFanSpeedButtons({ catalog, remoteId: device.tuyaRemoteId }).length
-        : 0;
-      const speedRangeMax =
-        isDirectFan && catalogSpeedCount > 0 ? catalogSpeedCount : FAN_SPEED_COUNT;
+      const speedRangeMax = catalog
+        ? catalogFanSpeedRangeMax({ catalog, remoteId: device.tuyaRemoteId })
+        : FAN_SPEED_COUNT;
       const commandTopic = topic(prefix, [...base, 'fan', 'set']);
       const percentageCommandTopic = topic(prefix, [...base, 'fan', 'percentage', 'set']);
       await this.client.publish(
@@ -244,7 +240,7 @@ export class MqttPublisher {
       await this.client.subscribe(percentageCommandTopic);
       await this.publishFanState(device);
 
-      if (isDirectFan && catalog) {
+      if (catalog) {
         await this.publishCatalogFanExtraButtons({ device, catalog });
       }
 
@@ -730,8 +726,7 @@ export class MqttPublisher {
     try {
       if (device.template === 'fan') {
         const fanState = asFanState(device.assumedState);
-        const isDirectFan = isDirectCatalogFan(device);
-        if (messageTopic.includes('/button/') && messageTopic.endsWith('/set') && isDirectFan) {
+        if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
           const slug = parts[4];
           if (!slug) {
             return;
@@ -745,42 +740,22 @@ export class MqttPublisher {
         } else if (messageTopic.endsWith('/fan/set')) {
           fanState.isOn = payload === 'ON';
           console.log(`MQTT fan ${deviceId} power ${payload}`);
-          if (isDirectFan) {
-            const powerButton = findCatalogFanPowerButton({
-              catalog,
-              remoteId: device.tuyaRemoteId,
-            });
-            await sendCatalogKey(powerButton.id, 'power');
-          } else {
-            await sendSlot('power');
-          }
+          const powerButton = resolveFanPowerButtonToSend({ catalog, device });
+          await sendCatalogKey(powerButton.buttonId, powerButton.label);
         } else if (messageTopic.endsWith('/fan/percentage/set')) {
-          const requestedSpeed = Number(payload);
-          const catalogSpeedCount = isDirectFan
-            ? listCatalogFanSpeedButtons({ catalog, remoteId: device.tuyaRemoteId }).length
-            : FAN_SPEED_COUNT;
-          const speedCeiling = catalogSpeedCount > 0 ? catalogSpeedCount : FAN_SPEED_COUNT;
-          const speed = Number.isFinite(requestedSpeed)
-            ? Math.min(speedCeiling, Math.max(1, Math.round(requestedSpeed)))
-            : 1;
+          const speedCeiling = catalogFanSpeedRangeMax({
+            catalog,
+            remoteId: device.tuyaRemoteId,
+          });
+          const speed = normalizeRequestedFanSpeed({
+            speed: Number(payload),
+            speedCeiling,
+          });
           fanState.isOn = true;
           fanState.speed = speed;
-          if (isDirectFan) {
-            const speedButton = resolveCatalogFanSpeedButton({
-              catalog,
-              remoteId: device.tuyaRemoteId,
-              speed,
-            });
-            console.log(`MQTT fan ${deviceId} speed ${speed} key ${speedButton.key}`);
-            await sendCatalogKey(speedButton.id, speedButton.key);
-          } else {
-            const speedSlotId = resolveMappedFanSpeedSlotId({
-              slots: device.slots,
-              speed,
-            });
-            console.log(`MQTT fan ${deviceId} speed ${speed} slot ${speedSlotId}`);
-            await sendSlot(speedSlotId);
-          }
+          const speedButton = resolveFanSpeedButtonToSend({ catalog, device, speed });
+          console.log(`MQTT fan ${deviceId} speed ${fanState.speed} ${speedButton.label}`);
+          await sendCatalogKey(speedButton.buttonId, speedButton.label);
         } else if (messageTopic.endsWith('/led/set')) {
           fanState.isLedOn = payload === 'ON';
           await sendSlot('led');

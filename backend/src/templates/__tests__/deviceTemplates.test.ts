@@ -144,6 +144,19 @@ describe('Fan speed slots', () => {
       'max',
     );
   });
+
+  it('treats max as speed 6 / boost instead of walking down to speed 5', () => {
+    assert.equal(
+      resolveMappedFanSpeedSlotId({
+        slots: {
+          speed_5: { buttonId: 's5' },
+          max: { buttonId: 'boost' },
+        },
+        speed: 6,
+      }),
+      'max',
+    );
+  });
 });
 
 describe('AC template slots', () => {
