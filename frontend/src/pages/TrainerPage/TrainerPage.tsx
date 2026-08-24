@@ -84,6 +84,11 @@ export const TrainerPage: FC<Props> = ({
   onFireCell,
   onListenCell,
   onSubmitCellText,
+  haDeviceName,
+  publishedTrainerDeviceName,
+  onHaDeviceNameChange,
+  onPublishToHomeAssistant,
+  isPublishHaPending,
   isLoading,
   isSavePending,
   isListenPending,
@@ -128,6 +133,11 @@ export const TrainerPage: FC<Props> = ({
         onFireCell={onFireCell}
         onListenCell={onListenCell}
         onSubmitCellText={onSubmitCellText}
+        haDeviceName={haDeviceName}
+        publishedTrainerDeviceName={publishedTrainerDeviceName}
+        onHaDeviceNameChange={onHaDeviceNameChange}
+        onPublishToHomeAssistant={onPublishToHomeAssistant}
+        isPublishHaPending={isPublishHaPending}
         isGeneratePending={isGeneratePending}
         isFirePending={isFirePending}
         isListenPending={isListenPending}

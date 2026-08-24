@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'material-react-toastify';
 import { useMemo, useState } from 'react';
 import {
+  fetchMappings,
   fetchTrainer,
   fireTrainerCell,
   generateTrainer,
@@ -9,6 +10,7 @@ import {
   listenTrainerSample,
   saveTrainerSchema,
   submitTrainerTextSample,
+  upsertMappingDevice,
 } from '../../libs/services/bridgeApi';
 import type {
   TrainerCaptureStep,
@@ -16,6 +18,17 @@ import type {
   TrainerSchema,
 } from '../../libs/services/types';
 import type { TrainerPageProps } from '.';
+
+const TRAINER_DEVICE_REMOTE_ID = 'trainer';
+const DEFAULT_HA_DEVICE_NAME = 'Bedroom AC';
+
+const toDeviceId = (name: string): string => {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+};
 
 const trainerStepKey = (step: TrainerCaptureStep): string => {
   return step.id;
@@ -59,6 +72,15 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     queryKey: ['trainer'],
     queryFn: fetchTrainer,
   });
+  const mappingsQuery = useQuery({
+    queryKey: ['mappings'],
+    queryFn: fetchMappings,
+  });
+  const publishedTrainerDevice = (mappingsQuery.data ?? []).find(
+    (device) =>
+      device.template === 'ac' &&
+      (device.irSource === 'trainer' || device.tuyaRemoteId === TRAINER_DEVICE_REMOTE_ID),
+  );
   const [schemaDraft, setSchemaDraft] = useState<TrainerSchema | undefined>(undefined);
   const [pasteByStepId, setPasteByStepId] = useState<Record<string, string>>({});
   const [pasteByCellId, setPasteByCellId] = useState<Record<string, string>>({});
@@ -66,6 +88,7 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
   const [generateModeId, setGenerateModeId] = useState('');
   const [selectedTempId, setSelectedTempId] = useState('');
   const [selectedSpeedId, setSelectedSpeedId] = useState('');
+  const [haDeviceName, setHaDeviceName] = useState(DEFAULT_HA_DEVICE_NAME);
   const schema = schemaDraft ?? trainerQuery.data?.schema;
   const inference = trainerQuery.data?.inference;
   const generation = trainerQuery.data?.generation;
@@ -139,6 +162,17 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     mutationFn: fireTrainerCell,
     onSuccess: async () => {
       toast.success('Sent generated frame');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const publishHaMutation = useMutation({
+    mutationFn: upsertMappingDevice,
+    onSuccess: async () => {
+      toast.success(
+        'Published to Home Assistant. Expose that climate entity, then say Hey Google, sync my devices.',
+      );
+      await queryClient.invalidateQueries({ queryKey: ['mappings'] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -297,6 +331,25 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
         text,
       });
     },
+    haDeviceName,
+    publishedTrainerDeviceName: publishedTrainerDevice?.name,
+    onHaDeviceNameChange: setHaDeviceName,
+    onPublishToHomeAssistant: () => {
+      const id = toDeviceId(haDeviceName) || publishedTrainerDevice?.id;
+      if (!id) {
+        toast.error('Name is required.');
+        return;
+      }
+      publishHaMutation.mutate({
+        id,
+        name: haDeviceName.trim() || DEFAULT_HA_DEVICE_NAME,
+        template: 'ac',
+        tuyaRemoteId: TRAINER_DEVICE_REMOTE_ID,
+        irSource: 'trainer',
+        slots: {},
+      });
+    },
+    isPublishHaPending: publishHaMutation.isPending,
     isLoading: trainerQuery.isLoading,
     isSavePending: saveSchemaMutation.isPending,
     isListenPending: listenMutation.isPending,

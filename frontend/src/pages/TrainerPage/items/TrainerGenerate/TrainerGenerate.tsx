@@ -35,6 +35,11 @@ type Props = Pick<
   | 'onFireCell'
   | 'onListenCell'
   | 'onSubmitCellText'
+  | 'haDeviceName'
+  | 'publishedTrainerDeviceName'
+  | 'onHaDeviceNameChange'
+  | 'onPublishToHomeAssistant'
+  | 'isPublishHaPending'
   | 'isGeneratePending'
   | 'isFirePending'
   | 'isListenPending'
@@ -155,6 +160,11 @@ export const TrainerGenerate: FC<Props> = ({
   onFireCell,
   onListenCell,
   onSubmitCellText,
+  haDeviceName,
+  publishedTrainerDeviceName,
+  onHaDeviceNameChange,
+  onPublishToHomeAssistant,
+  isPublishHaPending,
   isGeneratePending,
   isFirePending,
   isListenPending,
@@ -177,6 +187,40 @@ export const TrainerGenerate: FC<Props> = ({
         <Button variant="contained" onClick={onGenerate} disabled={isGeneratePending}>
           {isGeneratePending ? 'Generating…' : 'Generate from samples'}
         </Button>
+        <Stack spacing={1}>
+          <Typography variant="subtitle1">Home Assistant / Google Home</Typography>
+          <Alert severity="info">
+            This publishes a climate entity to Home Assistant over MQTT. Then expose that climate
+            entity in HA Voice assistants and say “Hey Google, sync my devices”. Google gets on/off,
+            cool / dry / fan, 16–30°C, and fan speed. Power saving stays Home Assistant only. Do not
+            expose Tuya’s own remotes.
+          </Alert>
+          {publishedTrainerDeviceName && (
+            <Alert severity="success">
+              Already on Home Assistant as {publishedTrainerDeviceName}. Publish again to refresh
+              MQTT discovery.
+            </Alert>
+          )}
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+            <TextField
+              label="HA device name"
+              value={haDeviceName}
+              onChange={(event) => onHaDeviceNameChange(event.target.value)}
+              sx={{ minWidth: 220, flexGrow: 1 }}
+            />
+            <Button
+              variant="contained"
+              onClick={onPublishToHomeAssistant}
+              disabled={isPublishHaPending || !haDeviceName.trim()}
+            >
+              {isPublishHaPending
+                ? 'Publishing…'
+                : publishedTrainerDeviceName
+                  ? 'Update Home Assistant'
+                  : 'Add to Home Assistant'}
+            </Button>
+          </Stack>
+        </Stack>
         {!generation && (
           <Alert severity="info">
             Restart the backend if this stays empty, then click Generate from samples.
