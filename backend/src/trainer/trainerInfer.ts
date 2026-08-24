@@ -362,8 +362,30 @@ export const listInconsistentSampleIds = (samples: TrainerSample[]): Set<string>
   return inconsistentSampleIds;
 };
 
-export const listMajorityLayoutSamples = (samples: TrainerSample[]): TrainerSample[] => {
-  const decodedSamples = samples.filter((sample) => sample.bits && !sample.bits.includes('?'));
+export const listFrameSamples = ({
+  schema,
+  samples,
+}: {
+  schema: TrainerSchema;
+  samples: TrainerSample[];
+}): TrainerSample[] => {
+  return samples.filter((sample) => {
+    const unlockedParam = schema.params.find((param) => param.id === sample.unlockedParamId);
+    return !unlockedParam || !isSeparateCommandParam(unlockedParam);
+  });
+};
+
+export const listMajorityLayoutSamples = ({
+  schema,
+  samples,
+}: {
+  schema: TrainerSchema;
+  samples: TrainerSample[];
+}): TrainerSample[] => {
+  const decodedSamples = listFrameSamples({
+    schema,
+    samples: samples.filter((sample) => sample.bits && !sample.bits.includes('?')),
+  });
   const inconsistentSampleIds = listInconsistentSampleIds(decodedSamples);
   const consistentSamples = decodedSamples.filter((sample) => !inconsistentSampleIds.has(sample.id));
   const otherLayoutSampleIds = new Set([
@@ -381,17 +403,27 @@ export const inferTrainerFields = ({
   samples: TrainerSample[];
 }): TrainerInference => {
   const decodedSamples = samples.filter((sample) => sample.bits && !sample.bits.includes('?'));
-  const inconsistentSampleIds = listInconsistentSampleIds(decodedSamples);
-  const consistentSamples = decodedSamples.filter((sample) => !inconsistentSampleIds.has(sample.id));
+  const commandSamples = decodedSamples.filter((sample) => {
+    const unlockedParam = schema.params.find((param) => param.id === sample.unlockedParamId);
+    return Boolean(unlockedParam && isSeparateCommandParam(unlockedParam));
+  });
+  const frameSamples = listFrameSamples({ schema, samples: decodedSamples });
+  const inconsistentSampleIds = listInconsistentSampleIds(frameSamples);
+  const consistentSamples = frameSamples.filter((sample) => !inconsistentSampleIds.has(sample.id));
   const otherLayoutSampleIds = new Set([
     ...listOtherLayoutSampleIds(consistentSamples),
     ...listOtherHeaderSampleIds(consistentSamples),
   ]);
-  const usableSamples = listMajorityLayoutSamples(samples);
+  const usableSamples = listMajorityLayoutSamples({ schema, samples });
   const flipsByParamId: Record<string, Set<number>> = {};
   const leftoverFlipsByParamId: Record<string, Set<number>> = {};
   const layoutChangeParamIds = new Set<string>();
   const unresolved: string[] = [];
+  if (commandSamples.length > 0) {
+    unresolved.push(
+      `ignored ${commandSamples.length} separate-command sample(s) so they do not rewrite the climate frame`,
+    );
+  }
   if (inconsistentSampleIds.size > 0) {
     unresolved.push(
       `ignored ${inconsistentSampleIds.size} sample(s) with the same labels as another capture but a different frame`,

@@ -212,4 +212,64 @@ describe('generateTrainerGrid', () => {
     assert.equal(powerSavingOff?.status, 'captured');
     assert.equal(powerSavingOff?.bits, '1000100011000000011111110010');
   });
+
+  it('does not generate 24C from a Power On packet that looks like 26C', () => {
+    const schema = createDefaultAcTrainerSchema();
+    const samples = [
+      sample({
+        id: '16',
+        receivedAt: '2026-01-01T00:00:00.000Z',
+        unlockedParamId: 'temp',
+        paramValues: { mode: 'cool', temp: '16', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100000001000000100101011',
+      }),
+      sample({
+        id: '23',
+        receivedAt: '2026-01-01T00:00:00.500Z',
+        unlockedParamId: 'temp',
+        paramValues: { mode: 'cool', temp: '23', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100000001000100000100010',
+      }),
+      sample({
+        id: '24',
+        receivedAt: '2026-01-01T00:00:01.000Z',
+        unlockedParamId: 'temp',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100000001000100100100011',
+      }),
+      sample({
+        id: '30',
+        receivedAt: '2026-01-01T00:00:01.500Z',
+        unlockedParamId: 'temp',
+        paramValues: { mode: 'cool', temp: '30', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100000001000111100101001',
+      }),
+      sample({
+        id: 'power-on',
+        receivedAt: '2026-01-01T00:00:05.000Z',
+        unlockedParamId: 'power',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', power: 'on' },
+        bits: '1000100000000000101100101101',
+      }),
+    ];
+    const inference = inferTrainerFields({ schema, samples });
+    const generation = generateTrainerGrid({ schema, samples, inference });
+    const cool24Medium = generation.cells.find(
+      (cell) =>
+        cell.kind === 'frame' &&
+        cell.paramValues.mode === 'cool' &&
+        cell.paramValues.temp === '24' &&
+        cell.paramValues.speed === 'medium',
+    );
+    const cool18Medium = generation.cells.find(
+      (cell) =>
+        cell.kind === 'frame' &&
+        cell.paramValues.mode === 'cool' &&
+        cell.paramValues.temp === '18' &&
+        cell.paramValues.speed === 'medium',
+    );
+    assert.equal(cool24Medium?.bits, '1000100000001000100100100011');
+    assert.equal(cool18Medium?.status, 'generated');
+    assert.equal(cool18Medium?.bits, '1000100000001000001100101101');
+  });
 });

@@ -455,7 +455,7 @@ export const generateTrainerGrid = ({
   if (!inference) {
     return { checksumKind: 'unknown', cells: [] };
   }
-  const majoritySamples = listMajorityLayoutSamples(samples);
+  const majoritySamples = listMajorityLayoutSamples({ schema, samples });
   const checksumKind = inferTrainerChecksumKind({
     samples: majoritySamples,
     checksumIndexes: inference.checksumIndexes,

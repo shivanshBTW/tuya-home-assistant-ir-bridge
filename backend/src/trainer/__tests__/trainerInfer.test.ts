@@ -284,8 +284,59 @@ describe('inferTrainerFields', () => {
     const powerSavingField = inference.fields.find((field) => field.paramId === 'powerSaving');
     assert.equal(powerSavingField?.kind, 'unresolved');
     assert.ok(
-      inference.unresolved.some((reason) => reason.includes('different frame layout')),
+      inference.unresolved.some(
+        (reason) =>
+          reason.includes('different frame layout') || reason.includes('separate-command'),
+      ),
     );
+  });
+
+  it('does not let a Power On packet rewrite temp into a 26C lookup', () => {
+    const schema = createDefaultAcTrainerSchema();
+    const inference = inferTrainerFields({
+      schema,
+      samples: [
+        sample({
+          id: '16',
+          receivedAt: '2026-01-01T00:00:00.000Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '16', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000000100101011',
+        }),
+        sample({
+          id: '23',
+          receivedAt: '2026-01-01T00:00:00.500Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '23', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000100000100010',
+        }),
+        sample({
+          id: '24',
+          receivedAt: '2026-01-01T00:00:01.000Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000100100100011',
+        }),
+        sample({
+          id: '30',
+          receivedAt: '2026-01-01T00:00:01.500Z',
+          unlockedParamId: 'temp',
+          paramValues: { mode: 'cool', temp: '30', speed: 'medium', powerSaving: 'off' },
+          bits: '1000100000001000111100101001',
+        }),
+        sample({
+          id: 'power-on',
+          receivedAt: '2026-01-01T00:00:05.000Z',
+          unlockedParamId: 'power',
+          paramValues: { mode: 'cool', temp: '24', speed: 'medium', power: 'on' },
+          bits: '1000100000000000101100101101',
+        }),
+      ],
+    });
+    const tempField = inference.fields.find((field) => field.paramId === 'temp');
+    assert.deepEqual(tempField?.bitIndexes, [16, 17, 18, 19]);
+    assert.equal(tempField?.kind, 'linear');
+    assert.equal(tempField?.lookup['24'], '1001');
   });
 
   it('does not treat a power-saving command as a conflicting leftover climate sample', () => {
