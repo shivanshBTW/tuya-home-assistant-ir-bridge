@@ -54,6 +54,9 @@ export const MapperPage: FC<Props> = ({
   watchedTemplate,
   isCreatingTrainerAc,
   isSelectedTrainerDevice,
+  isSelectedDirectCatalogFan,
+  isCreatingDirectCatalogFan,
+  shouldHideSlotAssignment,
   onCreateDevice,
   onAssignSlot,
   onClearSlot,
@@ -80,9 +83,10 @@ export const MapperPage: FC<Props> = ({
       <Box sx={{ flexShrink: 0 }}>
         <Typography variant="h4">Build HA remotes</Typography>
         <Typography color="text.secondary">
-          Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot. For
-          the trained AC, Google Home uses the climate entity (cool / dry / fan, 16–30°C, low /
-          medium / high). Power saving stays a Home Assistant select.
+          Tuya names and order are untrusted. Test-fire a button, then drop it into an HA slot. Fans
+          skip slots: power and speeds 1–5 come from the catalog remote, and leftover keys become
+          Home Assistant buttons. For the trained AC, Google Home uses the climate entity (cool /
+          dry / fan, 16–30°C, low / medium / high). Power saving stays a Home Assistant select.
         </Typography>
       </Box>
 
@@ -164,7 +168,7 @@ export const MapperPage: FC<Props> = ({
               />
             )}
             <Button type="submit" variant="contained" disabled={isSavePending}>
-              Create mapping
+              {watchedTemplate === 'fan' ? 'Add to Home Assistant' : 'Create mapping'}
             </Button>
           </Box>
 
@@ -249,7 +253,7 @@ export const MapperPage: FC<Props> = ({
           <Typography variant="h6" sx={{ flexShrink: 0 }}>
             HA slots {selectedDevice ? `— ${selectedDevice.name}` : ''}
           </Typography>
-          {!selectedDevice && (
+          {!selectedDevice && !shouldHideSlotAssignment && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               Create or select a mapping to assign the extras below.
             </Alert>
@@ -274,7 +278,16 @@ export const MapperPage: FC<Props> = ({
               Power saving is a Home Assistant select only.
             </Alert>
           )}
+          {(isSelectedDirectCatalogFan || isCreatingDirectCatalogFan) && (
+            <Alert severity="info" sx={{ flexShrink: 0 }}>
+              No slot assignment. Power and speeds 1–5 fire the matching catalog keys. Boost, sleep,
+              timers, and learned speed +/− become Home Assistant buttons on the same device. Google
+              Home sees on/off and percentage.
+            </Alert>
+          )}
           {!isSelectedTrainerDevice &&
+            !isSelectedDirectCatalogFan &&
+            !isCreatingDirectCatalogFan &&
             (selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
               <Alert severity="info" sx={{ flexShrink: 0 }}>
                 Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
@@ -282,10 +295,11 @@ export const MapperPage: FC<Props> = ({
                 slots are optional Home Assistant extras from the Custom remote.
               </Alert>
             )}
-          {isSelectedTrainerDevice ? (
+          {shouldHideSlotAssignment ? (
             <Alert severity="success" sx={{ flexShrink: 0 }}>
-              No catalog slots to assign. MQTT will republish when you save. Expose this climate
-              entity to Google Home from Home Assistant.
+              {isSelectedTrainerDevice
+                ? 'No catalog slots to assign. MQTT will republish when you save. Expose this climate entity to Google Home from Home Assistant.'
+                : 'Catalog keys apply directly. MQTT will republish when you save. Expose the fan entity to Google Home from Home Assistant.'}
             </Alert>
           ) : (
             <Stack spacing={1} sx={paneScrollSx}>

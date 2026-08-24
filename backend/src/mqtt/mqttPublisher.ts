@@ -1,6 +1,15 @@
 import mqtt from 'mqtt';
 import type { AppConfig } from '../config.js';
 import {
+  catalogFanButtonSlug,
+  findCatalogFanExtraButton,
+  findCatalogFanPowerButton,
+  isDirectCatalogFan,
+  listCatalogFanExtraButtons,
+  listCatalogFanSpeedButtons,
+  resolveCatalogFanSpeedButton,
+} from '../templates/catalogFan.js';
+import {
   FAN_SPEED_COUNT,
   resolveMappedFanSpeedSlotId,
   TV_HDMI_SOURCE_NAME,
@@ -205,6 +214,13 @@ export class MqttPublisher {
     const base = [BRIDGE_ID, device.id];
 
     if (device.template === 'fan') {
+      const catalog = await this.jsonStore.readCatalog();
+      const isDirectFan = isDirectCatalogFan(device);
+      const catalogSpeedCount = catalog
+        ? listCatalogFanSpeedButtons({ catalog, remoteId: device.tuyaRemoteId }).length
+        : 0;
+      const speedRangeMax =
+        isDirectFan && catalogSpeedCount > 0 ? catalogSpeedCount : FAN_SPEED_COUNT;
       const commandTopic = topic(prefix, [...base, 'fan', 'set']);
       const percentageCommandTopic = topic(prefix, [...base, 'fan', 'percentage', 'set']);
       await this.client.publish(
@@ -217,7 +233,7 @@ export class MqttPublisher {
           percentage_command_topic: percentageCommandTopic,
           percentage_state_topic: topic(prefix, [...base, 'fan', 'percentage']),
           speed_range_min: 1,
-          speed_range_max: FAN_SPEED_COUNT,
+          speed_range_max: speedRangeMax,
           payload_on: 'ON',
           payload_off: 'OFF',
           device: { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name },
@@ -227,6 +243,10 @@ export class MqttPublisher {
       await this.client.subscribe(commandTopic);
       await this.client.subscribe(percentageCommandTopic);
       await this.publishFanState(device);
+
+      if (isDirectFan && catalog) {
+        await this.publishCatalogFanExtraButtons({ device, catalog });
+      }
 
       if (device.slots.led) {
         const ledCommandTopic = topic(prefix, [...base, 'led', 'set']);
@@ -448,6 +468,41 @@ export class MqttPublisher {
     }
   }
 
+  private async publishCatalogFanExtraButtons({
+    device,
+    catalog,
+  }: {
+    device: DeviceMapping;
+    catalog: Catalog;
+  }): Promise<void> {
+    if (!this.client) {
+      return;
+    }
+    const prefix = this.appConfig.mqttDiscoveryPrefix;
+    const base = [BRIDGE_ID, device.id];
+    const haDevice = { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name };
+
+    for (const extraButton of listCatalogFanExtraButtons({
+      catalog,
+      remoteId: device.tuyaRemoteId,
+    })) {
+      const slug = catalogFanButtonSlug(extraButton);
+      const commandTopic = topic(prefix, [...base, 'button', slug, 'set']);
+      await this.client.publish(
+        topic(prefix, ['button', BRIDGE_ID, `${device.id}_${slug}`, 'config']),
+        JSON.stringify({
+          name: `${device.name} ${extraButton.keyName}`,
+          unique_id: `${BRIDGE_ID}_${device.id}_${slug}`,
+          command_topic: commandTopic,
+          payload_press: 'PRESS',
+          device: haDevice,
+        }),
+        { retain: true },
+      );
+      await this.client.subscribe(commandTopic);
+    }
+  }
+
   private async publishAcExtraEntities(device: DeviceMapping): Promise<void> {
     if (!this.client) {
       return;
@@ -642,6 +697,19 @@ export class MqttPublisher {
       return;
     }
 
+    const sendCatalogKey = async (buttonId: string, label: string) => {
+      const sendResult = await sendCatalogButton({
+        catalog,
+        buttonId,
+        cloudClient: this.getCloudClient(),
+        configuredIp: this.appConfig.tuyaLocalIp,
+        configuredMac: this.appConfig.tuyaLocalMac,
+      });
+      console.log(
+        `MQTT sent ${device.name} ${label} via ${sendResult.path} remote ${sendResult.remoteId}`,
+      );
+    };
+
     const sendSlot = async (slotId: string) => {
       const slot = device.slots[slotId];
       if (!slot) {
@@ -662,23 +730,57 @@ export class MqttPublisher {
     try {
       if (device.template === 'fan') {
         const fanState = asFanState(device.assumedState);
-        if (messageTopic.endsWith('/fan/set')) {
+        const isDirectFan = isDirectCatalogFan(device);
+        if (messageTopic.includes('/button/') && messageTopic.endsWith('/set') && isDirectFan) {
+          const slug = parts[4];
+          if (!slug) {
+            return;
+          }
+          const extraButton = findCatalogFanExtraButton({
+            catalog,
+            remoteId: device.tuyaRemoteId,
+            slug,
+          });
+          await sendCatalogKey(extraButton.id, slug);
+        } else if (messageTopic.endsWith('/fan/set')) {
           fanState.isOn = payload === 'ON';
           console.log(`MQTT fan ${deviceId} power ${payload}`);
-          await sendSlot('power');
+          if (isDirectFan) {
+            const powerButton = findCatalogFanPowerButton({
+              catalog,
+              remoteId: device.tuyaRemoteId,
+            });
+            await sendCatalogKey(powerButton.id, 'power');
+          } else {
+            await sendSlot('power');
+          }
         } else if (messageTopic.endsWith('/fan/percentage/set')) {
           const requestedSpeed = Number(payload);
+          const catalogSpeedCount = isDirectFan
+            ? listCatalogFanSpeedButtons({ catalog, remoteId: device.tuyaRemoteId }).length
+            : FAN_SPEED_COUNT;
+          const speedCeiling = catalogSpeedCount > 0 ? catalogSpeedCount : FAN_SPEED_COUNT;
           const speed = Number.isFinite(requestedSpeed)
-            ? Math.min(FAN_SPEED_COUNT, Math.max(1, Math.round(requestedSpeed)))
+            ? Math.min(speedCeiling, Math.max(1, Math.round(requestedSpeed)))
             : 1;
-          const speedSlotId = resolveMappedFanSpeedSlotId({
-            slots: device.slots,
-            speed,
-          });
           fanState.isOn = true;
           fanState.speed = speed;
-          console.log(`MQTT fan ${deviceId} speed ${speed} slot ${speedSlotId}`);
-          await sendSlot(speedSlotId);
+          if (isDirectFan) {
+            const speedButton = resolveCatalogFanSpeedButton({
+              catalog,
+              remoteId: device.tuyaRemoteId,
+              speed,
+            });
+            console.log(`MQTT fan ${deviceId} speed ${speed} key ${speedButton.key}`);
+            await sendCatalogKey(speedButton.id, speedButton.key);
+          } else {
+            const speedSlotId = resolveMappedFanSpeedSlotId({
+              slots: device.slots,
+              speed,
+            });
+            console.log(`MQTT fan ${deviceId} speed ${speed} slot ${speedSlotId}`);
+            await sendSlot(speedSlotId);
+          }
         } else if (messageTopic.endsWith('/led/set')) {
           fanState.isLedOn = payload === 'ON';
           await sendSlot('led');

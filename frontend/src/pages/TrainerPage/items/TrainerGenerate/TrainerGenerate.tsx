@@ -201,7 +201,12 @@ export const TrainerGenerate: FC<Props> = ({
               MQTT discovery.
             </Alert>
           )}
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            useFlexGap
+            sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+          >
             <TextField
               label="HA device name"
               value={haDeviceName}
