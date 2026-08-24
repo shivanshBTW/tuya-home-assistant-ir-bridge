@@ -78,7 +78,7 @@ const isSameParamValues = (
 };
 
 const trainerRuntime = (trainer: TrainerFile) => {
-  const inference = trainer.inference ?? inferTrainerFields(trainer);
+  const inference = inferTrainerFields(trainer);
   const generation = generateTrainerGrid({ ...trainer, inference });
   return { inference, generation };
 };
@@ -130,11 +130,13 @@ export const listTrainerClimatePackets = ({
   }
   const paramValues = climateStateToTrainerFrameValues(nextState);
   const packets: { bits: string; label: string }[] = [];
-  if (!previousState?.isOn) {
-    const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
-    if (!onCell?.bits) {
+  const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
+  const isTurningOn = !previousState?.isOn;
+  if (!onCell?.bits) {
+    if (isTurningOn) {
       throw new Error('Capture Train Power On before Home Assistant or Google can turn the AC on');
     }
+  } else {
     const overlaidOn = overlayGeneratedBits({
       schema: trainer.schema,
       inference,
@@ -143,12 +145,18 @@ export const listTrainerClimatePackets = ({
       checksumKind: generation.checksumKind,
     });
     if (!overlaidOn.bits) {
-      throw new Error(
-        overlaidOn.needsInputReason ??
-          'Could not write the last climate state onto the Power On packet',
-      );
+      if (isTurningOn) {
+        throw new Error(
+          overlaidOn.needsInputReason ??
+            'Could not write the last climate state onto the Power On packet',
+        );
+      }
+    } else {
+      packets.push({ bits: overlaidOn.bits, label: onCell.label });
     }
-    packets.push({ bits: overlaidOn.bits, label: onCell.label });
+  }
+  if (packets.length > 0) {
+    return packets;
   }
   const cell = generation.cells.find(
     (frameCell) =>
@@ -161,8 +169,7 @@ export const listTrainerClimatePackets = ({
         .join(' ')}`,
     );
   }
-  packets.push({ bits: cell.bits, label: cell.label });
-  return packets;
+  return [{ bits: cell.bits, label: cell.label }];
 };
 
 export const listTrainerPowerSavingPackets = ({

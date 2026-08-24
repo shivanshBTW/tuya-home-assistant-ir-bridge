@@ -204,7 +204,7 @@ describe('listTrainerClimatePackets', () => {
     });
     assert.deepEqual(
       packetsAt24.map((packet) => packet.bits),
-      ['1000100000000000100100101011', '1000100000001000100100100011'],
+      ['1000100000000000100100101011'],
     );
     const packetsAt18 = listTrainerClimatePackets({
       trainer,
@@ -212,7 +212,14 @@ describe('listTrainerClimatePackets', () => {
       nextState: { isOn: true, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
     });
     assert.equal(packetsAt18[0]?.bits, '1000100000000000001100100101');
-    assert.equal(packetsAt18[0]?.bits === '1000100000000000101100101101', false);
+    assert.equal(packetsAt18.length, 1);
+    const alreadyOnPackets = listTrainerClimatePackets({
+      trainer,
+      previousState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
+      nextState: { isOn: true, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
+    });
+    assert.equal(alreadyOnPackets[0]?.bits, '1000100000000000001100100101');
+    assert.equal(alreadyOnPackets.length, 1);
   });
 
   it('requires a captured Power On command when turning on', () => {
