@@ -38,6 +38,8 @@ describe('climate MQTT discovery', () => {
     assert.equal(discovery.current_temperature_topic, 'ha/current_temperature');
     assert.equal(discovery.temperature_state_topic, 'ha/temperature');
     assert.deepEqual(discovery.modes, ['off', 'cool', 'dry', 'fan_only']);
+    assert.equal(discovery.temp_step, 1);
+    assert.equal(discovery.precision, 1);
     assert.equal(rememberedAcTemperatureC(memoryState({ temperatureC: undefined })), 24);
   });
 });

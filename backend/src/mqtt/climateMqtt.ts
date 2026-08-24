@@ -183,6 +183,7 @@ export const acClimateDiscoveryPayload = ({
     min_temp: AC_MIN_TEMPERATURE_C,
     max_temp: AC_MAX_TEMPERATURE_C,
     temp_step: 1,
+    precision: 1,
     fan_mode_command_topic: fanModeCommandTopic,
     fan_mode_state_topic: fanModeStateTopic,
     fan_modes: [...AC_FAN_MODES],
