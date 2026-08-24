@@ -181,4 +181,31 @@ describe('generateTrainerGrid', () => {
     assert.equal(powerOff?.status, 'needs_input');
     assert.equal(generation.cells.filter((cell) => cell.kind === 'command').length, 5);
   });
+
+  it('keeps power saving off when leftover climate labels match a different packet', () => {
+    const schema = createDefaultAcTrainerSchema();
+    const samples = [
+      sample({
+        id: '24',
+        receivedAt: '2026-01-01T00:00:01.000Z',
+        unlockedParamId: 'temp',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100000001000100100100011',
+      }),
+      sample({
+        id: 'ps-off',
+        receivedAt: '2026-01-01T00:00:04.000Z',
+        unlockedParamId: 'powerSaving',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100011000000011111110010',
+      }),
+    ];
+    const inference = inferTrainerFields({ schema, samples });
+    const generation = generateTrainerGrid({ schema, samples, inference });
+    const powerSavingOff = generation.cells.find(
+      (cell) => cell.kind === 'command' && cell.paramValues.powerSaving === 'off',
+    );
+    assert.equal(powerSavingOff?.status, 'captured');
+    assert.equal(powerSavingOff?.bits, '1000100011000000011111110010');
+  });
 });

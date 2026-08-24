@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { TrainerSample, TrainerSchema } from '../../types.js';
-import { inferTrainerFields } from '../trainerInfer.js';
+import { inferTrainerFields, listInconsistentSampleIds } from '../trainerInfer.js';
 import { createDefaultAcTrainerSchema } from '../trainerPlan.js';
 
 const PREFIX = '1000100000001000';
@@ -286,5 +286,25 @@ describe('inferTrainerFields', () => {
     assert.ok(
       inference.unresolved.some((reason) => reason.includes('different frame layout')),
     );
+  });
+
+  it('does not treat a power-saving command as a conflicting leftover climate sample', () => {
+    const samples = [
+      sample({
+        id: '24',
+        receivedAt: '2026-01-01T00:00:01.000Z',
+        unlockedParamId: 'temp',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100000001000100100100011',
+      }),
+      sample({
+        id: 'ps-off',
+        receivedAt: '2026-01-01T00:00:04.000Z',
+        unlockedParamId: 'powerSaving',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', powerSaving: 'off' },
+        bits: '1000100011000000011111110010',
+      }),
+    ];
+    assert.equal(listInconsistentSampleIds(samples).has('ps-off'), false);
   });
 });

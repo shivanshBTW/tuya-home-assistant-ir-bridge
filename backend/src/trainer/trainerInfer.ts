@@ -325,7 +325,7 @@ const listOtherLayoutSampleIds = (samples: TrainerSample[]): Set<string> => {
 export const listInconsistentSampleIds = (samples: TrainerSample[]): Set<string> => {
   const samplesByParamValues = new Map<string, TrainerSample[]>();
   for (const sample of samples) {
-    const groupKey = serializeParamValues(sample.paramValues);
+    const groupKey = `${sample.unlockedParamId}:${serializeParamValues(sample.paramValues)}`;
     const group = samplesByParamValues.get(groupKey) ?? [];
     group.push(sample);
     samplesByParamValues.set(groupKey, group);
