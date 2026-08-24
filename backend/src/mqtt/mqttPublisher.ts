@@ -388,7 +388,11 @@ export class MqttPublisher {
     );
     await this.client.publish(
       topic(prefix, [...base, 'climate', 'mode']),
-      climateState.mode && isAcHvacMode(climateState.mode) ? climateState.mode : 'cool',
+      climateState.isOn && climateState.mode && isAcHvacMode(climateState.mode)
+        ? climateState.mode
+        : climateState.isOn
+          ? 'cool'
+          : 'off',
       { retain: true },
     );
     await this.client.publish(

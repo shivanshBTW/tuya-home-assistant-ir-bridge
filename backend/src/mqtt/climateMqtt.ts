@@ -172,7 +172,7 @@ export const acClimateDiscoveryPayload = ({
     unique_id: uniqueId,
     mode_command_topic: modeCommandTopic,
     mode_state_topic: modeStateTopic,
-    modes: [...AC_HVAC_MODES],
+    modes: ['off', ...AC_HVAC_MODES],
     power_command_topic: powerCommandTopic,
     power_state_topic: powerStateTopic,
     payload_on: 'ON',
