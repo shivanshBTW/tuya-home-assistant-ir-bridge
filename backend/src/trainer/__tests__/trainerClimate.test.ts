@@ -179,22 +179,41 @@ describe('listTrainerClimatePackets', () => {
     );
   });
 
-  it('sends the climate frame when turning on, not the captured Power On overlay', () => {
+  it('sends captured Power On as-is, then the climate frame, when turning on', () => {
     const trainer = trainedFile();
+    const powerOnBits = '1000100000000000101100101101';
+    trainer.samples = [
+      ...trainer.samples,
+      {
+        id: 'power-on',
+        receivedAt: '2026-01-01T00:00:05.000Z',
+        source: 'text',
+        unlockedParamId: 'power',
+        paramValues: { mode: 'cool', temp: '24', speed: 'medium', power: 'on' },
+        bits: powerOnBits,
+        code: 'hidden',
+        kind: 'cloud_hex',
+        pulseCount: 8,
+      },
+    ];
+    trainer.inference = inferTrainerFields(trainer);
+    trainer.generation = generateTrainerGrid(trainer);
     const packetsAt24 = listTrainerClimatePackets({
       trainer,
       previousState: { isOn: false, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
       nextState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
     });
-    assert.equal(packetsAt24.length, 1);
-    assert.equal(packetsAt24[0]?.bits.slice(12, 16), '1000');
+    assert.equal(packetsAt24.length, 2);
+    assert.equal(packetsAt24[0]?.bits, powerOnBits);
+    assert.equal(packetsAt24[1]?.bits.slice(12, 16), '1000');
     const packetsAt18 = listTrainerClimatePackets({
       trainer,
       previousState: { isOn: false, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
       nextState: { isOn: true, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
     });
-    assert.equal(packetsAt18.length, 1);
-    assert.equal(packetsAt18[0]?.bits, '1000100000001000001100101101');
+    assert.equal(packetsAt18[0]?.bits, powerOnBits);
+    assert.equal(packetsAt18[1]?.bits, '1000100000001000001100101101');
+    assert.equal(packetsAt18.length, 2);
     const alreadyOnPackets = listTrainerClimatePackets({
       trainer,
       previousState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
@@ -202,6 +221,18 @@ describe('listTrainerClimatePackets', () => {
     });
     assert.equal(alreadyOnPackets[0]?.bits, '1000100000001000001100101101');
     assert.equal(alreadyOnPackets.length, 1);
+  });
+
+  it('requires a captured Power On command when turning on', () => {
+    assert.throws(
+      () =>
+        listTrainerClimatePackets({
+          trainer: trainedFile(),
+          previousState: { isOn: false, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
+          nextState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
+        }),
+      /Power On/,
+    );
   });
 
   it('requires a captured Power Off command', () => {

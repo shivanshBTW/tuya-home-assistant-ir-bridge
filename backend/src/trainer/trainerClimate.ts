@@ -110,6 +110,7 @@ const findTrainerPowerCell = ({
 
 export const listTrainerClimatePackets = ({
   trainer,
+  previousState,
   nextState,
 }: {
   trainer: TrainerFile;
@@ -127,18 +128,31 @@ export const listTrainerClimatePackets = ({
     return [{ bits: offCell.bits, label: offCell.label }];
   }
   const paramValues = climateStateToTrainerFrameValues(nextState);
+  const packets: { bits: string; label: string }[] = [];
+  const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
+  const isTurningOn = !previousState?.isOn;
+  if (isTurningOn) {
+    if (!onCell?.bits) {
+      throw new Error('Capture Train Power On before Home Assistant or Google can turn the AC on');
+    }
+    packets.push({ bits: onCell.bits, label: onCell.label });
+  }
   const cell = generation.cells.find(
     (frameCell) =>
       frameCell.kind === 'frame' && climateParamsMatch(frameCell.paramValues, paramValues),
   );
   if (!cell?.bits) {
+    if (packets.length > 0) {
+      return packets;
+    }
     throw new Error(
       `No trained climate frame for ${Object.entries(paramValues)
         .map(([paramId, optionId]) => `${paramId}=${optionId}`)
         .join(' ')}`,
     );
   }
-  return [{ bits: cell.bits, label: cell.label }];
+  packets.push({ bits: cell.bits, label: cell.label });
+  return packets;
 };
 
 export const listTrainerPowerSavingPackets = ({

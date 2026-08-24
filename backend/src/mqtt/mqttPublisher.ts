@@ -630,6 +630,13 @@ export class MqttPublisher {
       commands,
       shouldApplyAllFields: isTrainerDevice,
     });
+    device.assumedState = nextState;
+    await this.publishClimateState(device);
+    const nextMapping: MappingFile = {
+      ...mapping,
+      devices: mapping.devices.map((item) => (item.id === device.id ? device : item)),
+    };
+    await this.jsonStore.writeMapping(nextMapping);
 
     const sendAcButton = async (buttonId: string) => {
       const sendResult = await sendCatalogButton({
@@ -685,13 +692,6 @@ export class MqttPublisher {
           );
         }
       }
-      device.assumedState = nextState;
-      const nextMapping: MappingFile = {
-        ...mapping,
-        devices: mapping.devices.map((item) => (item.id === device.id ? device : item)),
-      };
-      await this.jsonStore.writeMapping(nextMapping);
-      await this.publishClimateState(device);
     } catch (error) {
       console.error(
         `MQTT climate command failed for ${deviceId}: ${

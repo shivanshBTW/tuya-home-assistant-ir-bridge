@@ -73,12 +73,16 @@ export const trainerPulsesForSend = ({
   }
   const templateCode = trainer ? climateTemplateCode({ trainer, bits: compactBits }) : undefined;
   if (templateCode) {
-    return {
-      pulses: writeBitsIntoTemplatePulses({
-        bits: compactBits,
-        templatePulses: decodeIrCode(templateCode).pulses,
-      }),
-    };
+    try {
+      return {
+        pulses: writeBitsIntoTemplatePulses({
+          bits: compactBits,
+          templatePulses: decodeIrCode(templateCode).pulses,
+        }),
+      };
+    } catch {
+      return { pulses: bitsToPulses(compactBits) };
+    }
   }
   return { pulses: bitsToPulses(compactBits) };
 };

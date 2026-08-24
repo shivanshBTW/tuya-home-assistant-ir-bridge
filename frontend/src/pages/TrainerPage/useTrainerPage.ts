@@ -160,9 +160,6 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
 
   const fireMutation = useMutation({
     mutationFn: fireTrainerCell,
-    onSuccess: async () => {
-      toast.success('Sent generated frame');
-    },
     onError: (error: Error) => toast.error(error.message),
   });
 
@@ -261,6 +258,75 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     schema?.primaryParamId,
   ]);
 
+  const pickerOptionIds = (modeId: string, paramId: 'temp' | 'speed'): string[] => {
+    return [
+      ...new Set(
+        frameCells
+          .filter((cell) => cell.paramValues[schema?.primaryParamId ?? 'mode'] === modeId)
+          .map((cell) => cell.paramValues[paramId])
+          .filter((optionId): optionId is string => Boolean(optionId)),
+      ),
+    ];
+  };
+
+  const resolvePickerOptionId = ({
+    selectedOptionId,
+    optionIds,
+    anchorOptionId,
+  }: {
+    selectedOptionId: string;
+    optionIds: string[];
+    anchorOptionId?: string;
+  }): string => {
+    if (selectedOptionId && optionIds.includes(selectedOptionId)) {
+      return selectedOptionId;
+    }
+    if (anchorOptionId && optionIds.includes(anchorOptionId)) {
+      return anchorOptionId;
+    }
+    return optionIds[0] ?? '';
+  };
+
+  const firePickerSelection = ({
+    modeId,
+    tempId,
+    speedId,
+  }: {
+    modeId: string;
+    tempId: string;
+    speedId: string;
+  }) => {
+    const tempOptionIds = pickerOptionIds(modeId, 'temp');
+    const speedOptionIds = pickerOptionIds(modeId, 'speed');
+    const nextTempId = resolvePickerOptionId({
+      selectedOptionId: tempId,
+      optionIds: tempOptionIds,
+      anchorOptionId: schema?.anchorValues.temp,
+    });
+    const nextSpeedId = resolvePickerOptionId({
+      selectedOptionId: speedId,
+      optionIds: speedOptionIds,
+      anchorOptionId: schema?.anchorValues.speed,
+    });
+    const cell = frameCells.find((frameCell) => {
+      if (frameCell.paramValues[schema?.primaryParamId ?? 'mode'] !== modeId) {
+        return false;
+      }
+      if (tempOptionIds.length > 0 && frameCell.paramValues.temp !== nextTempId) {
+        return false;
+      }
+      if (speedOptionIds.length > 0 && frameCell.paramValues.speed !== nextSpeedId) {
+        return false;
+      }
+      return true;
+    });
+    if (!cell?.bits) {
+      toast.error('No generated combo for this selection yet');
+      return;
+    }
+    fireMutation.mutate({ cellId: cell.id, bits: cell.bits });
+  };
+
   return {
     schema,
     onSchemaChange: setSchemaDraft,
@@ -307,14 +373,40 @@ export const useTrainerPage = (_props: TrainerPageProps) => {
     onInfer: () => inferMutation.mutate(),
     onGenerate: () => generateMutation.mutate(),
     onGenerateFilterChange: setGenerateFilter,
-    onGenerateModeChange: setGenerateModeId,
-    onSelectedTempChange: setSelectedTempId,
-    onSelectedSpeedChange: setSelectedSpeedId,
+    onGenerateModeChange: (modeId: string) => {
+      setGenerateModeId(modeId);
+      firePickerSelection({
+        modeId,
+        tempId: effectiveTempId,
+        speedId: effectiveSpeedId,
+      });
+    },
+    onSelectedTempChange: (tempId: string) => {
+      setSelectedTempId(tempId);
+      firePickerSelection({
+        modeId: pickerModeId,
+        tempId,
+        speedId: effectiveSpeedId,
+      });
+    },
+    onSelectedSpeedChange: (speedId: string) => {
+      setSelectedSpeedId(speedId);
+      firePickerSelection({
+        modeId: pickerModeId,
+        tempId: effectiveTempId,
+        speedId,
+      });
+    },
     onPasteCellChange: (cellId: string, text: string) => {
       setPasteByCellId((current) => ({ ...current, [cellId]: text }));
     },
     onFireCell: (cell: TrainerGeneratedCell) => {
-      fireMutation.mutate({ cellId: cell.id, bits: cell.bits });
+      fireMutation.mutate(
+        { cellId: cell.id, bits: cell.bits },
+        {
+          onSuccess: () => toast.success('Sent generated frame'),
+        },
+      );
     },
     onListenCell: (cell: TrainerGeneratedCell) => {
       toast.info('Point the remote at the blaster');

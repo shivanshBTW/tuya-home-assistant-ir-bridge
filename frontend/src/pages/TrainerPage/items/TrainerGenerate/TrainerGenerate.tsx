@@ -112,7 +112,7 @@ const CellActions: FC<{
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
         {hasBits && (
           <Button variant="contained" onClick={() => onFireCell(cell)} disabled={isFirePending}>
-            Send
+            {isFirePending ? 'Sending…' : 'Send'}
           </Button>
         )}
         {!hasBits && (
@@ -181,8 +181,8 @@ export const TrainerGenerate: FC<Props> = ({
       <Stack spacing={2}>
         <Typography variant="h6">Remote</Typography>
         <Typography color="text.secondary">
-          Pick any generated combo and send it. Temp should list every degree we can build, not only
-          the ones you captured.
+          Changing mode, temp, or speed sends that combo to the blaster. Use Send again to repeat
+          the same frame.
         </Typography>
         <Button variant="contained" onClick={onGenerate} disabled={isGeneratePending}>
           {isGeneratePending ? 'Generating…' : 'Generate from samples'}
@@ -294,7 +294,12 @@ export const TrainerGenerate: FC<Props> = ({
                 sx={{ border: 1, borderColor: 'primary.main', borderRadius: 1, p: 1.5 }}
               >
                 <Typography>
-                  {selectedFrameCell.bits ? 'Ready' : 'Needs capture'} · {selectedFrameCell.label}
+                  {selectedFrameCell.bits
+                    ? isFirePending
+                      ? 'Sending…'
+                      : 'Ready'
+                    : 'Needs capture'}{' '}
+                  · {selectedFrameCell.label}
                 </Typography>
                 <CellActions
                   cell={selectedFrameCell}
