@@ -11,6 +11,7 @@ import {
   pulsesToBase64,
   pulsesToBits,
   pulsesToHex,
+  writeBitsIntoTemplatePulses,
 } from '../irDecode.js';
 
 describe('decodeIrCode', () => {
@@ -106,5 +107,30 @@ describe('bitsToPulses', () => {
 
   it('rejects non-bit characters', () => {
     assert.throws(() => bitsToPulses('1002'), /bits must be a 0\/1 string/);
+  });
+});
+
+describe('writeBitsIntoTemplatePulses', () => {
+  it('rewrites bit spaces and keeps the captured header and trailing mark', () => {
+    const capturedBits = '1000100000001000110001001000';
+    const generatedBits = '1000100000001000001100101101';
+    const syntheticPulses = bitsToPulses(capturedBits);
+    const capturedPulses = [
+      3308,
+      9870,
+      ...syntheticPulses.slice(2, -1),
+      506,
+      syntheticPulses[syntheticPulses.length - 1] ?? 30_000,
+    ];
+    const overlaidPulses = writeBitsIntoTemplatePulses({
+      bits: generatedBits,
+      templatePulses: capturedPulses,
+    });
+    assert.equal(pulsesToBits(overlaidPulses), generatedBits);
+    assert.equal(overlaidPulses[0], 3308);
+    assert.equal(overlaidPulses[1], 9870);
+    assert.equal(overlaidPulses.at(-2), 506);
+    assert.equal(overlaidPulses.at(-1), 30_000);
+    assert.equal(overlaidPulses.length, capturedPulses.length);
   });
 });

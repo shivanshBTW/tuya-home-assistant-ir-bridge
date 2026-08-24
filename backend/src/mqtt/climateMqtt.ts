@@ -187,6 +187,7 @@ export const acClimateDiscoveryPayload = ({
     fan_mode_command_topic: fanModeCommandTopic,
     fan_mode_state_topic: fanModeStateTopic,
     fan_modes: [...AC_FAN_MODES],
+    optimistic: true,
     device: { identifiers: [deviceIdentifier], name: deviceName },
   };
 };

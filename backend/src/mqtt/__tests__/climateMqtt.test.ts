@@ -8,6 +8,7 @@ import {
   climateCommandKindFromTopic,
   rememberedAcTemperatureC,
 } from '../climateMqtt.js';
+import { isMqttCommandTopic, mqttDeviceIdFromTopic } from '../mqttPublisher.js';
 
 const memoryState = (overrides: Partial<ClimateAssumedState> = {}): ClimateAssumedState => ({
   isOn: true,
@@ -40,6 +41,7 @@ describe('climate MQTT discovery', () => {
     assert.deepEqual(discovery.modes, ['off', 'cool', 'dry', 'fan_only']);
     assert.equal(discovery.temp_step, 1);
     assert.equal(discovery.precision, 1);
+    assert.equal(discovery.optimistic, true);
     assert.equal(rememberedAcTemperatureC(memoryState({ temperatureC: undefined })), 24);
   });
 });
@@ -142,6 +144,23 @@ describe('climateCommandKindFromTopic', () => {
     assert.equal(
       climateCommandKindFromTopic('homeassistant/tuya_ha_ir_bridge/ac/media/set'),
       undefined,
+    );
+  });
+});
+
+describe('mqttDeviceIdFromTopic', () => {
+  it('reads the device id after the bridge id, not the discovery prefix', () => {
+    assert.equal(
+      mqttDeviceIdFromTopic('homeassistant/tuya_ha_ir_bridge/bedroom_ac/climate/temperature/set'),
+      'bedroom_ac',
+    );
+    assert.equal(
+      isMqttCommandTopic('homeassistant/tuya_ha_ir_bridge/bedroom_ac/climate/mode'),
+      false,
+    );
+    assert.equal(
+      isMqttCommandTopic('homeassistant/tuya_ha_ir_bridge/bedroom_ac/climate/mode/set'),
+      true,
     );
   });
 });

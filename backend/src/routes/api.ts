@@ -570,7 +570,7 @@ export const registerRoutes = ({
       throw new Error('bits or a generated cellId is required');
     }
     const localDevice = await requireLocalBlaster();
-    const sendResult = await sendTrainerIrBits({ bits: rawBits, localDevice });
+    const sendResult = await sendTrainerIrBits({ bits: rawBits, localDevice, trainer });
     console.log(
       `Trainer fired ${sendResult.bitCount} bits (${sendResult.pulseCount} pulses) to ${localDevice.host}`,
     );

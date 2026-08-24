@@ -43,6 +43,7 @@ import type {
   MappingFile,
   MediaAssumedState,
   SlotDefinition,
+  TrainerFile,
 } from '../types.js';
 import { sendCatalogButton } from '../tuya/sendButton.js';
 import { resolveLocalBlaster } from '../tuya/localSend.js';
@@ -61,6 +62,28 @@ import { sendTrainerIrBits } from '../trainer/trainerIrSend.js';
 const BRIDGE_ID = 'tuya_ha_ir_bridge';
 
 const topic = (prefix: string, parts: string[]): string => `${prefix}/${parts.join('/')}`;
+
+export const mqttDeviceIdFromTopic = (messageTopic: string): string | undefined => {
+  const parts = messageTopic.split('/');
+  const bridgeIndex = parts.indexOf(BRIDGE_ID);
+  if (bridgeIndex === -1) {
+    return undefined;
+  }
+  return parts[bridgeIndex + 1];
+};
+
+export const isMqttCommandTopic = (messageTopic: string): boolean => {
+  return (
+    messageTopic.endsWith('/set') ||
+    messageTopic.endsWith('/volume_up') ||
+    messageTopic.endsWith('/volume_down')
+  );
+};
+
+const buttonSlugFromTopic = (messageTopic: string): string | undefined => {
+  const match = /\/button\/([^/]+)\/set$/.exec(messageTopic);
+  return match?.[1];
+};
 
 const asFanState = (value: DeviceMapping['assumedState']): FanAssumedState => {
   const state = value as FanAssumedState;
@@ -120,8 +143,10 @@ export class MqttPublisher {
     });
 
     this.client.on('message', (messageTopic, payload) => {
-      const parts = messageTopic.split('/');
-      const deviceId = parts[2];
+      if (!isMqttCommandTopic(messageTopic)) {
+        return;
+      }
+      const deviceId = mqttDeviceIdFromTopic(messageTopic);
       if (!deviceId) {
         return;
       }
@@ -141,6 +166,7 @@ export class MqttPublisher {
       });
     });
 
+    await this.client.subscribe(`${this.appConfig.mqttDiscoveryPrefix}/${BRIDGE_ID}/#`);
     await this.publishAll();
     console.log('MQTT discovery published');
   }
@@ -232,6 +258,7 @@ export class MqttPublisher {
           speed_range_max: speedRangeMax,
           payload_on: 'ON',
           payload_off: 'OFF',
+          optimistic: true,
           device: { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name },
         }),
         { retain: true },
@@ -255,6 +282,7 @@ export class MqttPublisher {
             state_topic: topic(prefix, [...base, 'led', 'state']),
             payload_on: 'ON',
             payload_off: 'OFF',
+            optimistic: true,
             device: { identifiers: [`${BRIDGE_ID}_${device.id}`], name: device.name },
           }),
           { retain: true },
@@ -602,13 +630,6 @@ export class MqttPublisher {
       commands,
       shouldApplyAllFields: isTrainerDevice,
     });
-    device.assumedState = nextState;
-    await this.publishClimateState(device);
-    const nextMapping: MappingFile = {
-      ...mapping,
-      devices: mapping.devices.map((item) => (item.id === device.id ? device : item)),
-    };
-    await this.jsonStore.writeMapping(nextMapping);
 
     const sendAcButton = async (buttonId: string) => {
       const sendResult = await sendCatalogButton({
@@ -631,37 +652,46 @@ export class MqttPublisher {
           previousState: previousClimateState,
           nextState,
         });
-        await this.sendTrainerPackets({ deviceId, packets, catalog });
-        return;
-      }
-      const climateButtons = listAcClimateButtonsToSend({
-        catalog,
-        remoteId: device.tuyaRemoteId,
-        previousState: previousClimateState,
-        nextState,
-      });
-      for (const [buttonIndex, climateButton] of climateButtons.entries()) {
-        if (buttonIndex > 0) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, RATE_LIMIT_DELAY_MS);
-          });
+        await this.sendTrainerPackets({ deviceId, packets, catalog, trainer });
+      } else {
+        const climateButtons = listAcClimateButtonsToSend({
+          catalog,
+          remoteId: device.tuyaRemoteId,
+          previousState: previousClimateState,
+          nextState,
+        });
+        for (const [buttonIndex, climateButton] of climateButtons.entries()) {
+          if (buttonIndex > 0) {
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, RATE_LIMIT_DELAY_MS);
+            });
+          }
+          console.log(
+            `MQTT climate key ${deviceId} ${climateButton.keyName} (${climateButton.key})`,
+          );
+          await sendAcButton(climateButton.id);
         }
-        console.log(`MQTT climate key ${deviceId} ${climateButton.keyName} (${climateButton.key})`);
-        await sendAcButton(climateButton.id);
+        if (climateButtons.length === 0) {
+          const hasFanCommand = commands.some((command) => command.kind === 'fan_mode');
+          const hasTemperatureCommand = commands.some((command) => command.kind === 'temperature');
+          const skipReason =
+            hasFanCommand && normalizeAcHvacMode(nextState.mode) === 'dry'
+              ? 'dry locks fan at low; Fan 2/3 IR not sent'
+              : hasTemperatureCommand
+                ? 'Custom has no absolute temp IR; card memory updated only'
+                : 'no IR for this snapshot';
+          console.log(
+            `MQTT climate ${deviceId} ${skipReason} (mode ${nextState.mode ?? 'cool'} ${rememberedAcTemperatureC(nextState)}C ${publishedAcFanMode(nextState)})`,
+          );
+        }
       }
-      if (climateButtons.length === 0) {
-        const hasFanCommand = commands.some((command) => command.kind === 'fan_mode');
-        const hasTemperatureCommand = commands.some((command) => command.kind === 'temperature');
-        const skipReason =
-          hasFanCommand && normalizeAcHvacMode(nextState.mode) === 'dry'
-            ? 'dry locks fan at low; Fan 2/3 IR not sent'
-            : hasTemperatureCommand
-              ? 'Custom has no absolute temp IR; card memory updated only'
-              : 'no IR for this snapshot';
-        console.log(
-          `MQTT climate ${deviceId} ${skipReason} (mode ${nextState.mode ?? 'cool'} ${rememberedAcTemperatureC(nextState)}C ${publishedAcFanMode(nextState)})`,
-        );
-      }
+      device.assumedState = nextState;
+      const nextMapping: MappingFile = {
+        ...mapping,
+        devices: mapping.devices.map((item) => (item.id === device.id ? device : item)),
+      };
+      await this.jsonStore.writeMapping(nextMapping);
+      await this.publishClimateState(device);
     } catch (error) {
       console.error(
         `MQTT climate command failed for ${deviceId}: ${
@@ -685,10 +715,9 @@ export class MqttPublisher {
       return;
     }
 
-    const parts = messageTopic.split('/');
-    const deviceId = parts[2];
+    const deviceId = mqttDeviceIdFromTopic(messageTopic);
     const device = mapping.devices.find((item) => item.id === deviceId);
-    if (!device) {
+    if (!deviceId || !device) {
       console.warn(`MQTT command ignored for ${messageTopic}: unknown device ${deviceId}`);
       return;
     }
@@ -724,10 +753,11 @@ export class MqttPublisher {
     };
 
     try {
+      let pendingSend: (() => Promise<void>) | undefined;
       if (device.template === 'fan') {
         const fanState = asFanState(device.assumedState);
         if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
-          const slug = parts[4];
+          const slug = buttonSlugFromTopic(messageTopic);
           if (!slug) {
             return;
           }
@@ -736,12 +766,12 @@ export class MqttPublisher {
             remoteId: device.tuyaRemoteId,
             slug,
           });
-          await sendCatalogKey(extraButton.id, slug);
+          pendingSend = () => sendCatalogKey(extraButton.id, slug);
         } else if (messageTopic.endsWith('/fan/set')) {
           fanState.isOn = payload === 'ON';
           console.log(`MQTT fan ${deviceId} power ${payload}`);
           const powerButton = resolveFanPowerButtonToSend({ catalog, device });
-          await sendCatalogKey(powerButton.buttonId, powerButton.label);
+          pendingSend = () => sendCatalogKey(powerButton.buttonId, powerButton.label);
         } else if (messageTopic.endsWith('/fan/percentage/set')) {
           const speedCeiling = catalogFanSpeedRangeMax({
             catalog,
@@ -755,16 +785,18 @@ export class MqttPublisher {
           fanState.speed = speed;
           const speedButton = resolveFanSpeedButtonToSend({ catalog, device, speed });
           console.log(`MQTT fan ${deviceId} speed ${fanState.speed} ${speedButton.label}`);
-          await sendCatalogKey(speedButton.buttonId, speedButton.label);
+          pendingSend = () => sendCatalogKey(speedButton.buttonId, speedButton.label);
         } else if (messageTopic.endsWith('/led/set')) {
           fanState.isLedOn = payload === 'ON';
-          await sendSlot('led');
+          pendingSend = () => sendSlot('led');
+        } else {
+          return;
         }
         device.assumedState = fanState;
       } else if (device.template === 'tv' || device.template === 'soundbar') {
         const mediaState = asMediaState(device.assumedState);
         if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
-          const slotId = parts[4];
+          const slotId = buttonSlugFromTopic(messageTopic);
           if (!slotId) {
             return;
           }
@@ -801,7 +833,7 @@ export class MqttPublisher {
       } else {
         const previousClimateState = asClimateState(device.assumedState);
         if (messageTopic.includes('/button/') && messageTopic.endsWith('/set')) {
-          const slotId = parts[4];
+          const slotId = buttonSlugFromTopic(messageTopic);
           if (!slotId) {
             return;
           }
@@ -814,7 +846,7 @@ export class MqttPublisher {
             }
             const trainer = await this.jsonStore.readTrainer();
             const packets = listTrainerPowerSavingPackets({ trainer, optionId });
-            await this.sendTrainerPackets({ deviceId: device.id, packets, catalog });
+            await this.sendTrainerPackets({ deviceId: device.id, packets, catalog, trainer });
             previousClimateState.powerSaving = trainerPowerSavingHaLabel(optionId) ?? payload;
             device.assumedState = previousClimateState;
           } else {
@@ -846,6 +878,9 @@ export class MqttPublisher {
       } else {
         await this.publishDevice(device);
       }
+      if (pendingSend) {
+        await pendingSend();
+      }
     } catch (error) {
       console.error(
         `MQTT command failed for ${messageTopic}: ${
@@ -859,10 +894,12 @@ export class MqttPublisher {
     deviceId,
     packets,
     catalog,
+    trainer,
   }: {
     deviceId: string;
     packets: { bits: string; label: string }[];
     catalog: Catalog;
+    trainer: TrainerFile;
   }): Promise<void> {
     if (!catalog.local.key) {
       throw new Error('No catalog local key. Run export first.');
@@ -881,9 +918,9 @@ export class MqttPublisher {
           setTimeout(resolve, RATE_LIMIT_DELAY_MS);
         });
       }
-      const sendResult = await sendTrainerIrBits({ bits: packet.bits, localDevice });
+      const sendResult = await sendTrainerIrBits({ bits: packet.bits, localDevice, trainer });
       console.log(
-        `MQTT trainer sent ${deviceId} ${packet.label} ${sendResult.bitCount} bits to ${localDevice.host}`,
+        `MQTT trainer sent ${deviceId} ${packet.label} ${sendResult.bitCount} bits (${sendResult.pulseCount} pulses) to ${localDevice.host}`,
       );
     }
   }

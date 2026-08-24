@@ -80,6 +80,69 @@ export const bitsToPulses = (bits: string): number[] => {
   return pulses;
 };
 
+const medianPulseUs = (values: number[]): number | undefined => {
+  if (values.length === 0) {
+    return undefined;
+  }
+  const sortedValues = [...values].sort((left, right) => left - right);
+  return sortedValues[Math.floor(sortedValues.length / 2)];
+};
+
+export const writeBitsIntoTemplatePulses = ({
+  bits,
+  templatePulses,
+}: {
+  bits: string;
+  templatePulses: number[];
+}): number[] => {
+  const compactBits = parseIrBitString(bits);
+  const pulses = [...templatePulses];
+  let startIndex = 0;
+  while (
+    startIndex < pulses.length &&
+    (quantizeIrPulseUs(pulses[startIndex] ?? 0) === 'M' ||
+      quantizeIrPulseUs(pulses[startIndex] ?? 0) === 'H')
+  ) {
+    startIndex += 1;
+  }
+  let endIndex = pulses.length;
+  while (endIndex > startIndex && quantizeIrPulseUs(pulses[endIndex - 1] ?? 0) === 'H') {
+    endIndex -= 1;
+  }
+
+  const shorts: number[] = [];
+  const longs: number[] = [];
+  for (let pulseIndex = startIndex; pulseIndex < endIndex; pulseIndex += 1) {
+    const symbol = quantizeIrPulseUs(pulses[pulseIndex] ?? 0);
+    if (symbol === 'S') {
+      shorts.push(pulses[pulseIndex] ?? 0);
+    }
+    if (symbol === 'L') {
+      longs.push(pulses[pulseIndex] ?? 0);
+    }
+  }
+  const shortUs = medianPulseUs(shorts) ?? IR_LG_SHORT_US;
+  const longUs = medianPulseUs(longs) ?? IR_LG_LONG_US;
+
+  let pulseIndex = startIndex;
+  let bitIndex = 0;
+  while (bitIndex < compactBits.length && pulseIndex + 1 < endIndex) {
+    const mark = quantizeIrPulseUs(pulses[pulseIndex] ?? 0);
+    const space = quantizeIrPulseUs(pulses[pulseIndex + 1] ?? 0);
+    if (mark === 'S' && (space === 'S' || space === 'L')) {
+      pulses[pulseIndex + 1] = compactBits[bitIndex] === '1' ? longUs : shortUs;
+      bitIndex += 1;
+      pulseIndex += 2;
+      continue;
+    }
+    pulseIndex += 1;
+  }
+  if (bitIndex < compactBits.length) {
+    throw new Error('Template pulse train is shorter than the bit string');
+  }
+  return pulses;
+};
+
 const decodeFromPulses = ({
   kind,
   pulses,

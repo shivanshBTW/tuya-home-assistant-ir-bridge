@@ -10,7 +10,7 @@ import {
   normalizeAcFanMode,
   normalizeAcHvacMode,
 } from '../templates/acCommand.js';
-import { generateTrainerGrid, overlayGeneratedBits } from './trainerGenerate.js';
+import { generateTrainerGrid } from './trainerGenerate.js';
 import { inferTrainerFields } from './trainerInfer.js';
 import {
   TRAINER_DEVICE_REMOTE_ID,
@@ -69,12 +69,11 @@ export const trainerPowerSavingHaLabel = (optionId: string | undefined): string 
   return normalizedOptionId ? TRAINER_POWER_SAVING_HA_OPTION_BY_ID[normalizedOptionId] : undefined;
 };
 
-const isSameParamValues = (
-  left: Record<string, string>,
-  right: Record<string, string>,
+const climateParamsMatch = (
+  cellValues: Record<string, string>,
+  wanted: Record<string, string>,
 ): boolean => {
-  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
-  return [...keys].every((key) => left[key] === right[key]);
+  return Object.entries(wanted).every(([key, value]) => cellValues[key] === value);
 };
 
 const trainerRuntime = (trainer: TrainerFile) => {
@@ -111,14 +110,13 @@ const findTrainerPowerCell = ({
 
 export const listTrainerClimatePackets = ({
   trainer,
-  previousState,
   nextState,
 }: {
   trainer: TrainerFile;
   previousState?: ClimateAssumedState;
   nextState: ClimateAssumedState;
 }): { bits: string; label: string }[] => {
-  const { inference, generation } = trainerRuntime(trainer);
+  const { generation } = trainerRuntime(trainer);
   if (!nextState.isOn) {
     const offCell = findTrainerPowerCell({ generation, optionId: 'off' });
     if (!offCell?.bits) {
@@ -129,44 +127,18 @@ export const listTrainerClimatePackets = ({
     return [{ bits: offCell.bits, label: offCell.label }];
   }
   const paramValues = climateStateToTrainerFrameValues(nextState);
-  const packets: { bits: string; label: string }[] = [];
-  const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
-  const isTurningOn = !previousState?.isOn;
-  if (isTurningOn) {
-    if (!onCell?.bits) {
-      throw new Error('Capture Train Power On before Home Assistant or Google can turn the AC on');
-    }
-    const overlaidOn = overlayGeneratedBits({
-      schema: trainer.schema,
-      inference,
-      paramValues,
-      templateBits: onCell.bits,
-      checksumKind: generation.checksumKind,
-    });
-    if (!overlaidOn.bits) {
-      throw new Error(
-        overlaidOn.needsInputReason ??
-          'Could not write the last climate state onto the Power On packet',
-      );
-    }
-    packets.push({ bits: overlaidOn.bits, label: onCell.label });
-  }
   const cell = generation.cells.find(
     (frameCell) =>
-      frameCell.kind === 'frame' && isSameParamValues(frameCell.paramValues, paramValues),
+      frameCell.kind === 'frame' && climateParamsMatch(frameCell.paramValues, paramValues),
   );
   if (!cell?.bits) {
-    if (packets.length > 0) {
-      return packets;
-    }
     throw new Error(
       `No trained climate frame for ${Object.entries(paramValues)
         .map(([paramId, optionId]) => `${paramId}=${optionId}`)
         .join(' ')}`,
     );
   }
-  packets.push({ bits: cell.bits, label: cell.label });
-  return packets;
+  return [{ bits: cell.bits, label: cell.label }];
 };
 
 export const listTrainerPowerSavingPackets = ({
