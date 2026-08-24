@@ -10,7 +10,7 @@ import {
   normalizeAcFanMode,
   normalizeAcHvacMode,
 } from '../templates/acCommand.js';
-import { generateTrainerGrid } from './trainerGenerate.js';
+import { generateTrainerGrid, overlayGeneratedBits } from './trainerGenerate.js';
 import { inferTrainerFields } from './trainerInfer.js';
 import {
   TRAINER_DEVICE_REMOTE_ID,
@@ -77,9 +77,10 @@ const isSameParamValues = (
   return [...keys].every((key) => left[key] === right[key]);
 };
 
-const trainerGeneration = (trainer: TrainerFile) => {
+const trainerRuntime = (trainer: TrainerFile) => {
   const inference = trainer.inference ?? inferTrainerFields(trainer);
-  return generateTrainerGrid({ ...trainer, inference });
+  const generation = generateTrainerGrid({ ...trainer, inference });
+  return { inference, generation };
 };
 
 export const findTrainerCommandCell = ({
@@ -91,7 +92,7 @@ export const findTrainerCommandCell = ({
   paramId: string;
   optionId: string;
 }): TrainerGeneratedCell | undefined => {
-  return trainerGeneration(trainer).cells.find(
+  return trainerRuntime(trainer).generation.cells.find(
     (cell) => cell.kind === 'command' && cell.paramValues[paramId] === optionId,
   );
 };
@@ -100,7 +101,7 @@ const findTrainerPowerCell = ({
   generation,
   optionId,
 }: {
-  generation: ReturnType<typeof trainerGeneration>;
+  generation: ReturnType<typeof trainerRuntime>['generation'];
   optionId: 'on' | 'off';
 }) => {
   return generation.cells.find(
@@ -117,7 +118,7 @@ export const listTrainerClimatePackets = ({
   previousState?: ClimateAssumedState;
   nextState: ClimateAssumedState;
 }): { bits: string; label: string }[] => {
-  const generation = trainerGeneration(trainer);
+  const { inference, generation } = trainerRuntime(trainer);
   if (!nextState.isOn) {
     const offCell = findTrainerPowerCell({ generation, optionId: 'off' });
     if (!offCell?.bits) {
@@ -127,15 +128,28 @@ export const listTrainerClimatePackets = ({
     }
     return [{ bits: offCell.bits, label: offCell.label }];
   }
+  const paramValues = climateStateToTrainerFrameValues(nextState);
   const packets: { bits: string; label: string }[] = [];
   if (!previousState?.isOn) {
     const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
     if (!onCell?.bits) {
       throw new Error('Capture Train Power On before Home Assistant or Google can turn the AC on');
     }
-    packets.push({ bits: onCell.bits, label: onCell.label });
+    const overlaidOn = overlayGeneratedBits({
+      schema: trainer.schema,
+      inference,
+      paramValues,
+      templateBits: onCell.bits,
+      checksumKind: generation.checksumKind,
+    });
+    if (!overlaidOn.bits) {
+      throw new Error(
+        overlaidOn.needsInputReason ??
+          'Could not write the last climate state onto the Power On packet',
+      );
+    }
+    packets.push({ bits: overlaidOn.bits, label: onCell.label });
   }
-  const paramValues = climateStateToTrainerFrameValues(nextState);
   const cell = generation.cells.find(
     (frameCell) =>
       frameCell.kind === 'frame' && isSameParamValues(frameCell.paramValues, paramValues),

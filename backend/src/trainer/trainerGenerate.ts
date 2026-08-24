@@ -290,7 +290,7 @@ const constantSliceFromNote = (note: TrainerDisabledNote | undefined): string | 
   return match?.[1];
 };
 
-const overlayGeneratedBits = ({
+export const overlayGeneratedBits = ({
   schema,
   inference,
   paramValues,

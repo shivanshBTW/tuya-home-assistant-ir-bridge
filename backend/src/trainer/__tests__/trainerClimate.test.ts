@@ -189,7 +189,7 @@ describe('listTrainerClimatePackets', () => {
         source: 'text',
         unlockedParamId: 'power',
         paramValues: { mode: 'cool', temp: '24', speed: 'medium', power: 'on' },
-        bits: '1000100011001111000000000100',
+        bits: '1000100000000000101100101101',
         code: 'hidden',
         kind: 'cloud_hex',
         pulseCount: 8,
@@ -197,15 +197,22 @@ describe('listTrainerClimatePackets', () => {
     ];
     trainer.inference = inferTrainerFields(trainer);
     trainer.generation = generateTrainerGrid(trainer);
-    const packets = listTrainerClimatePackets({
+    const packetsAt24 = listTrainerClimatePackets({
       trainer,
       previousState: { isOn: false, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
       nextState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
     });
     assert.deepEqual(
-      packets.map((packet) => packet.bits),
-      ['1000100011001111000000000100', '1000100000001000100100100011'],
+      packetsAt24.map((packet) => packet.bits),
+      ['1000100000000000100100101011', '1000100000001000100100100011'],
     );
+    const packetsAt18 = listTrainerClimatePackets({
+      trainer,
+      previousState: { isOn: false, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
+      nextState: { isOn: true, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
+    });
+    assert.equal(packetsAt18[0]?.bits, '1000100000000000001100100101');
+    assert.equal(packetsAt18[0]?.bits === '1000100000000000101100101101', false);
   });
 
   it('requires a captured Power On command when turning on', () => {
