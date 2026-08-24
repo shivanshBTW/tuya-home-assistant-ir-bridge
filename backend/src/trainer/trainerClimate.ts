@@ -1,4 +1,9 @@
-import type { ClimateAssumedState, DeviceMapping, TrainerFile, TrainerGeneratedCell } from '../types.js';
+import type {
+  ClimateAssumedState,
+  DeviceMapping,
+  TrainerFile,
+  TrainerGeneratedCell,
+} from '../types.js';
 import {
   AC_DEFAULT_TEMPERATURE_C,
   clampAcTemperatureC,
@@ -126,9 +131,7 @@ export const listTrainerClimatePackets = ({
   if (!previousState?.isOn) {
     const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
     if (!onCell?.bits) {
-      throw new Error(
-        'Capture Train Power On before Home Assistant or Google can turn the AC on',
-      );
+      throw new Error('Capture Train Power On before Home Assistant or Google can turn the AC on');
     }
     packets.push({ bits: onCell.bits, label: onCell.label });
   }

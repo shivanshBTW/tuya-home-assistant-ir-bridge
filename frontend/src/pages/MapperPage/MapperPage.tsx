@@ -179,8 +179,7 @@ export const MapperPage: FC<Props> = ({
               >
                 {devices.map((device) => (
                   <MenuItem key={device.id} value={device.id}>
-                    {device.name} (
-                    {device.template}
+                    {device.name} ({device.template}
                     {device.irSource === 'trainer' ? ', trained' : ''})
                   </MenuItem>
                 ))}
@@ -210,38 +209,38 @@ export const MapperPage: FC<Props> = ({
                 Trained AC does not use Tuya catalog buttons. Climate IR comes from Train.
               </Alert>
             ) : (
-            <>
-            {(selectedRemote?.buttons ?? []).map((button) => (
-              <Box
-                key={button.id}
-                sx={{
-                  display: 'flex',
-                  gap: 1,
-                  alignItems: 'center',
-                  p: 1,
-                  borderRadius: 1,
-                  bgcolor: selectedButtonId === button.id ? 'action.selected' : 'transparent',
-                }}
-              >
-                <Button
-                  size="small"
-                  variant={selectedButtonId === button.id ? 'contained' : 'outlined'}
-                  onClick={() => onSelectButton(button.id)}
-                  sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
-                >
-                  {getButtonDisplayName(button)}
-                </Button>
-                {button.hasCode && <Chip size="small" label="raw" />}
-                <Button
-                  size="small"
-                  onClick={() => onTestFire(button.id)}
-                  disabled={isTestFirePending}
-                >
-                  Test
-                </Button>
-              </Box>
-            ))}
-            </>
+              <>
+                {(selectedRemote?.buttons ?? []).map((button) => (
+                  <Box
+                    key={button.id}
+                    sx={{
+                      display: 'flex',
+                      gap: 1,
+                      alignItems: 'center',
+                      p: 1,
+                      borderRadius: 1,
+                      bgcolor: selectedButtonId === button.id ? 'action.selected' : 'transparent',
+                    }}
+                  >
+                    <Button
+                      size="small"
+                      variant={selectedButtonId === button.id ? 'contained' : 'outlined'}
+                      onClick={() => onSelectButton(button.id)}
+                      sx={{ flexGrow: 1, justifyContent: 'flex-start' }}
+                    >
+                      {getButtonDisplayName(button)}
+                    </Button>
+                    {button.hasCode && <Chip size="small" label="raw" />}
+                    <Button
+                      size="small"
+                      onClick={() => onTestFire(button.id)}
+                      disabled={isTestFirePending}
+                    >
+                      Test
+                    </Button>
+                  </Box>
+                ))}
+              </>
             )}
           </Stack>
         </Paper>
@@ -277,43 +276,43 @@ export const MapperPage: FC<Props> = ({
           )}
           {!isSelectedTrainerDevice &&
             (selectedDevice?.template === 'ac' || selectedTemplate?.id === 'ac') && (
-            <Alert severity="info" sx={{ flexShrink: 0 }}>
-              Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
-              speed are sent from the Bedroom Air Conditioner library automatically. These six slots
-              are optional Home Assistant extras from the Custom remote.
-            </Alert>
-          )}
+              <Alert severity="info" sx={{ flexShrink: 0 }}>
+                Google climate is not in this list. Power, cool, dry, fan-only, temperature, and fan
+                speed are sent from the Bedroom Air Conditioner library automatically. These six
+                slots are optional Home Assistant extras from the Custom remote.
+              </Alert>
+            )}
           {isSelectedTrainerDevice ? (
             <Alert severity="success" sx={{ flexShrink: 0 }}>
               No catalog slots to assign. MQTT will republish when you save. Expose this climate
               entity to Google Home from Home Assistant.
             </Alert>
           ) : (
-          <Stack spacing={1} sx={paneScrollSx}>
-            {(selectedTemplate?.slots ?? []).map((slot) => {
-              const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;
-              return (
-                <Box key={slot.id} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <Button
-                    variant="outlined"
-                    onClick={() => onAssignSlot(slot.id)}
-                    sx={{ flexGrow: 1, justifyContent: 'space-between' }}
-                  >
-                    <span>
-                      {slot.label}
-                      {slot.isRequired ? ' *' : ''}
-                    </span>
-                    <span>{assignedButtonId ? buttonById[assignedButtonId] : 'unassigned'}</span>
-                  </Button>
-                  {assignedButtonId && (
-                    <Button size="small" onClick={() => onClearSlot(slot.id)}>
-                      Clear
+            <Stack spacing={1} sx={paneScrollSx}>
+              {(selectedTemplate?.slots ?? []).map((slot) => {
+                const assignedButtonId = selectedDevice?.slots[slot.id]?.buttonId;
+                return (
+                  <Box key={slot.id} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => onAssignSlot(slot.id)}
+                      sx={{ flexGrow: 1, justifyContent: 'space-between' }}
+                    >
+                      <span>
+                        {slot.label}
+                        {slot.isRequired ? ' *' : ''}
+                      </span>
+                      <span>{assignedButtonId ? buttonById[assignedButtonId] : 'unassigned'}</span>
                     </Button>
-                  )}
-                </Box>
-              );
-            })}
-          </Stack>
+                    {assignedButtonId && (
+                      <Button size="small" onClick={() => onClearSlot(slot.id)}>
+                        Clear
+                      </Button>
+                    )}
+                  </Box>
+                );
+              })}
+            </Stack>
           )}
         </Paper>
       </Box>
