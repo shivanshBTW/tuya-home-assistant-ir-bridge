@@ -1,9 +1,5 @@
 import { TuyaDevice } from '@apocaliss92/nodetuya';
-import {
-  DEFAULT_IR_LEARN_DP,
-  DEFAULT_IR_SEND_DP,
-  STUDY_LISTEN_TIMEOUT_MS,
-} from '../constants.js';
+import { DEFAULT_IR_LEARN_DP, DEFAULT_IR_SEND_DP, STUDY_LISTEN_TIMEOUT_MS } from '../constants.js';
 import type { LocalDevice } from '../types.js';
 
 const LEARNED_DP_IDS = [DEFAULT_IR_LEARN_DP, '2', '13'] as const;

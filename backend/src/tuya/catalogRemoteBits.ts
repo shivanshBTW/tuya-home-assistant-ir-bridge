@@ -4,7 +4,10 @@ import { decodeIrCode } from './irDecode.js';
 const LG_REMOTE_PATTERN = /lg/i;
 
 const isLgRemote = (remote: CatalogRemote): boolean => {
-  return LG_REMOTE_PATTERN.test(remote.remoteName ?? '') || LG_REMOTE_PATTERN.test(remote.brandName ?? '');
+  return (
+    LG_REMOTE_PATTERN.test(remote.remoteName ?? '') ||
+    LG_REMOTE_PATTERN.test(remote.brandName ?? '')
+  );
 };
 
 export const listCatalogRemoteBits = ({

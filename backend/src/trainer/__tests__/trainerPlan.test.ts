@@ -42,7 +42,9 @@ describe('listTrainerCapturePlan', () => {
     assert.equal(fanTempProbes.length, 2);
     assert.equal(fanTempProbes[0]?.paramValues[TRAINER_PARAM_TEMP], undefined);
     assert.equal(
-      plan.some((step) => step.kind === 'probe' && step.probeParamId === TRAINER_PARAM_POWER_SAVING),
+      plan.some(
+        (step) => step.kind === 'probe' && step.probeParamId === TRAINER_PARAM_POWER_SAVING,
+      ),
       false,
     );
     assert.equal(

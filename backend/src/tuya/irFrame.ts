@@ -22,11 +22,7 @@ export const classifyCatalogIrCode = (code: string): CatalogIrCodeKind => {
   if (TUYA_KEY_SYMBOL_PATTERN.test(code)) {
     return 'symbol_key';
   }
-  if (
-    code.length >= MIN_HEX_CODE_LENGTH &&
-    code.length % 2 === 0 &&
-    HEX_CODE_PATTERN.test(code)
-  ) {
+  if (code.length >= MIN_HEX_CODE_LENGTH && code.length % 2 === 0 && HEX_CODE_PATTERN.test(code)) {
     return 'cloud_hex';
   }
   return 'lan_base64';

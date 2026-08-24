@@ -10,7 +10,11 @@ import {
   upsertMappingDevice,
 } from '../../libs/services/bridgeApi';
 import { getButtonDisplayName } from '../../libs/buttonLabel';
-import type { DeviceIrSourceAPI, DeviceMapping, DeviceTemplateIdAPI } from '../../libs/services/types';
+import type {
+  DeviceIrSourceAPI,
+  DeviceMapping,
+  DeviceTemplateIdAPI,
+} from '../../libs/services/types';
 import type { MapperPageProps } from '.';
 
 const TRAINER_DEVICE_REMOTE_ID = 'trainer';
@@ -56,10 +60,7 @@ export const useMapperPage = (_props: MapperPageProps) => {
     defaultValues: { name: '', template: 'fan', irSource: 'catalog' },
   });
 
-  const remotes = useMemo(
-    () => catalogQuery.data?.remotes ?? [],
-    [catalogQuery.data?.remotes],
-  );
+  const remotes = useMemo(() => catalogQuery.data?.remotes ?? [], [catalogQuery.data?.remotes]);
   const selectedRemote = remotes.find((remote) => remote.remoteId === selectedRemoteId);
   const devices = mappingsQuery.data ?? [];
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId);
@@ -151,7 +152,8 @@ export const useMapperPage = (_props: MapperPageProps) => {
 
   return {
     isCatalogLoading: catalogQuery.isLoading,
-    catalogErrorMessage: catalogQuery.error instanceof Error ? catalogQuery.error.message : undefined,
+    catalogErrorMessage:
+      catalogQuery.error instanceof Error ? catalogQuery.error.message : undefined,
     remotes,
     selectedRemoteId,
     selectedRemote,

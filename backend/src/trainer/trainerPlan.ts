@@ -97,7 +97,9 @@ export const normalizeTrainerSchema = (schema: TrainerSchema): TrainerSchema => 
       },
       fan_only: {
         ...(schema.constraints.fan_only ?? {}),
-        [TRAINER_PARAM_POWER]: schema.constraints.fan_only?.[TRAINER_PARAM_POWER] ?? { kind: 'off' },
+        [TRAINER_PARAM_POWER]: schema.constraints.fan_only?.[TRAINER_PARAM_POWER] ?? {
+          kind: 'off',
+        },
       },
     },
     anchorValues: {

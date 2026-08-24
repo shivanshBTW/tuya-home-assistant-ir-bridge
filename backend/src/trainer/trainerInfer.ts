@@ -32,7 +32,9 @@ const hasSameParamKeys = ({
 }): boolean => {
   const leftKeys = Object.keys(left).sort();
   const rightKeys = Object.keys(right).sort();
-  return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index]);
+  return (
+    leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index])
+  );
 };
 
 const intersectSets = (sets: Set<number>[]): Set<number> => {
@@ -55,8 +57,14 @@ const parseBinaryInt = (bits: string): number | undefined => {
 const fieldKindForLookup = (lookup: Record<string, string>): TrainerParamField['kind'] => {
   const points = Object.entries(lookup)
     .filter(([optionId]) => /^-?\d+$/.test(optionId))
-    .map(([optionId, bits]) => ({ optionNumber: Number(optionId), bitNumber: parseBinaryInt(bits) }))
-    .filter((point): point is { optionNumber: number; bitNumber: number } => point.bitNumber !== undefined)
+    .map(([optionId, bits]) => ({
+      optionNumber: Number(optionId),
+      bitNumber: parseBinaryInt(bits),
+    }))
+    .filter(
+      (point): point is { optionNumber: number; bitNumber: number } =>
+        point.bitNumber !== undefined,
+    )
     .sort((left, right) => left.optionNumber - right.optionNumber);
   if (points.length < 3) {
     return 'lookup';
@@ -73,7 +81,8 @@ const fieldKindForLookup = (lookup: Record<string, string>): TrainerParamField['
   }
   const isLinear = points.every((point) => {
     const expected =
-      firstPoint.bitNumber + ((point.optionNumber - firstPoint.optionNumber) * bitStep) / optionStep;
+      firstPoint.bitNumber +
+      ((point.optionNumber - firstPoint.optionNumber) * bitStep) / optionStep;
     return point.bitNumber === expected;
   });
   return isLinear ? 'linear' : 'lookup';
@@ -201,8 +210,10 @@ const listOtherHeaderSampleIds = (samples: TrainerSample[]): Set<string> => {
   }
   const majorityCount = samples.filter(
     (sample) =>
-      sample.bits.slice(FRAME_VARIANT_BIT_INDEX, FRAME_VARIANT_BIT_INDEX + FRAME_VARIANT_BIT_LENGTH) ===
-      majoritySlice,
+      sample.bits.slice(
+        FRAME_VARIANT_BIT_INDEX,
+        FRAME_VARIANT_BIT_INDEX + FRAME_VARIANT_BIT_LENGTH,
+      ) === majoritySlice,
   ).length;
   if (majorityCount <= samples.length / 2) {
     return new Set();
@@ -387,7 +398,9 @@ export const listMajorityLayoutSamples = ({
     samples: samples.filter((sample) => sample.bits && !sample.bits.includes('?')),
   });
   const inconsistentSampleIds = listInconsistentSampleIds(decodedSamples);
-  const consistentSamples = decodedSamples.filter((sample) => !inconsistentSampleIds.has(sample.id));
+  const consistentSamples = decodedSamples.filter(
+    (sample) => !inconsistentSampleIds.has(sample.id),
+  );
   const otherLayoutSampleIds = new Set([
     ...listOtherLayoutSampleIds(consistentSamples),
     ...listOtherHeaderSampleIds(consistentSamples),
@@ -506,9 +519,7 @@ export const inferTrainerFields = ({
     }
   }
   const modeFlipSet = leftoverFlipsByParamId[schema.primaryParamId] ?? new Set<number>();
-  const modeUnique = new Set(
-    [...modeFlipSet].filter((bitIndex) => !knownFieldBits.has(bitIndex)),
-  );
+  const modeUnique = new Set([...modeFlipSet].filter((bitIndex) => !knownFieldBits.has(bitIndex)));
   if (modeUnique.size > 0) {
     flipsByParamId[schema.primaryParamId] = new Set([
       ...(flipsByParamId[schema.primaryParamId] ?? []),

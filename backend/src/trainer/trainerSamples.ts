@@ -21,9 +21,6 @@ export const upsertTrainerSample = ({
   const nextStepId = sampleStepId(sample);
   return {
     ...trainer,
-    samples: [
-      ...trainer.samples.filter((item) => sampleStepId(item) !== nextStepId),
-      sample,
-    ],
+    samples: [...trainer.samples.filter((item) => sampleStepId(item) !== nextStepId), sample],
   };
 };

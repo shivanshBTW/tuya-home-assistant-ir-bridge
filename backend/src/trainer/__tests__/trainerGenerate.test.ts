@@ -150,9 +150,13 @@ describe('generateTrainerGrid', () => {
         cell.paramValues.speed === 'high',
     );
     assert.equal(cool24High?.status, 'generated');
-    assert.equal(cool24High?.bits, encodeFrame({ tempBits: '1001', speedBits: '0100', checksumBits: '0101' }));
+    assert.equal(
+      cool24High?.bits,
+      encodeFrame({ tempBits: '1001', speedBits: '0100', checksumBits: '0101' }),
+    );
     const dry24 = generation.cells.find(
-      (cell) => cell.kind === 'frame' && cell.paramValues.mode === 'dry' && cell.paramValues.temp === '24',
+      (cell) =>
+        cell.kind === 'frame' && cell.paramValues.mode === 'dry' && cell.paramValues.temp === '24',
     );
     assert.equal(dry24?.status, 'generated');
     assert.equal(dry24?.bits, '1000100000001001100100000010');

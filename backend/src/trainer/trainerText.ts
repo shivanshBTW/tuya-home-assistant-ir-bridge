@@ -41,7 +41,10 @@ export const decodeTrainerText = (text: string): TrainerDecodedText => {
       code: pulsesToHex(pulses),
     };
   } catch (error) {
-    if (error instanceof Error && error.message === 'Pasted payload did not decode to usable 0/1 bits') {
+    if (
+      error instanceof Error &&
+      error.message === 'Pasted payload did not decode to usable 0/1 bits'
+    ) {
       throw error;
     }
   }

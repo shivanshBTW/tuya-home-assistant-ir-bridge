@@ -423,7 +423,11 @@ export const registerRoutes = ({
   const readSampleLabel = (
     body: Record<string, unknown>,
   ): Pick<TrainerSample, 'paramValues' | 'unlockedParamId' | 'probeParamId' | 'probeIndex'> => {
-    if (!body.paramValues || typeof body.paramValues !== 'object' || Array.isArray(body.paramValues)) {
+    if (
+      !body.paramValues ||
+      typeof body.paramValues !== 'object' ||
+      Array.isArray(body.paramValues)
+    ) {
       throw new Error('paramValues is required');
     }
     const unlockedParamId =

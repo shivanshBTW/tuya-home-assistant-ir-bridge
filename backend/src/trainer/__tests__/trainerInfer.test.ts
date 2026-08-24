@@ -30,7 +30,15 @@ const sample = ({
   pulseCount: 8,
 });
 
-const encodeFrame = ({ tempBits, speedBits, checksumBits }: { tempBits: string; speedBits: string; checksumBits: string }): string => {
+const encodeFrame = ({
+  tempBits,
+  speedBits,
+  checksumBits,
+}: {
+  tempBits: string;
+  speedBits: string;
+  checksumBits: string;
+}): string => {
   return `${PREFIX}${tempBits}${speedBits}${checksumBits}`;
 };
 

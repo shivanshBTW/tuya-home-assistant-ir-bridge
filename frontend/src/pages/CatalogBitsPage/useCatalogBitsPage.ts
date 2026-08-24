@@ -17,6 +17,7 @@ export const useCatalogBitsPage = (_props: CatalogBitsPageProps) => {
     buttons: remoteBitsQuery.data?.buttons ?? [],
     onSelectRemote: setRemoteId,
     isLoading: remoteBitsQuery.isLoading,
-    errorMessage: remoteBitsQuery.error instanceof Error ? remoteBitsQuery.error.message : undefined,
+    errorMessage:
+      remoteBitsQuery.error instanceof Error ? remoteBitsQuery.error.message : undefined,
   };
 };

@@ -1,9 +1,5 @@
 import type { LocalDevice } from '../types.js';
-import {
-  bitsToPulses,
-  parseIrBitString,
-  pulsesToHex,
-} from '../tuya/irDecode.js';
+import { bitsToPulses, parseIrBitString, pulsesToHex } from '../tuya/irDecode.js';
 import { catalogCodeToLocalIrFrame } from '../tuya/irFrame.js';
 import { sendLocalIrCode } from '../tuya/localSend.js';
 

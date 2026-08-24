@@ -108,9 +108,7 @@ export class JsonStore {
       const emptyTrainerFile = createEmptyTrainerFile();
       return {
         updatedAt: parsed.updatedAt ?? emptyTrainerFile.updatedAt,
-        schema: parsed.schema
-          ? normalizeTrainerSchema(parsed.schema)
-          : emptyTrainerFile.schema,
+        schema: parsed.schema ? normalizeTrainerSchema(parsed.schema) : emptyTrainerFile.schema,
         samples: Array.isArray(parsed.samples) ? parsed.samples : [],
         ...(parsed.inference ? { inference: parsed.inference } : {}),
         ...(parsed.generation ? { generation: parsed.generation } : {}),

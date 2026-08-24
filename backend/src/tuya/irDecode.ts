@@ -201,13 +201,7 @@ export const compareIrPulses = ({
   return diffs;
 };
 
-export const compareIrBits = ({
-  left,
-  right,
-}: {
-  left: string;
-  right: string;
-}): IrBitDiff[] => {
+export const compareIrBits = ({ left, right }: { left: string; right: string }): IrBitDiff[] => {
   const length = Math.max(left.length, right.length);
   const diffs: IrBitDiff[] = [];
   for (let index = 0; index < length; index += 1) {

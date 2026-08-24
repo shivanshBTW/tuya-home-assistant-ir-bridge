@@ -72,7 +72,8 @@ const encodeLinearBits = ({
       bitNumber: parseBinaryInt(bits),
     }))
     .filter(
-      (point): point is { optionNumber: number; bitNumber: number } => point.bitNumber !== undefined,
+      (point): point is { optionNumber: number; bitNumber: number } =>
+        point.bitNumber !== undefined,
     )
     .sort((left, right) => left.optionNumber - right.optionNumber);
   const firstPoint = points[0];
@@ -167,12 +168,7 @@ const isTrailingChecksumNibble = ({
   if (bitLength < NIBBLE_LENGTH || checksumIndexes.length !== NIBBLE_LENGTH) {
     return false;
   }
-  const expectedIndexes = [
-    bitLength - 4,
-    bitLength - 3,
-    bitLength - 2,
-    bitLength - 1,
-  ];
+  const expectedIndexes = [bitLength - 4, bitLength - 3, bitLength - 2, bitLength - 1];
   return expectedIndexes.every((bitIndex, index) => checksumIndexes[index] === bitIndex);
 };
 
@@ -188,10 +184,7 @@ export const inferTrainerChecksumKind = ({
   }
   const bitLength = samples[0]?.bits.length ?? 0;
   const hasNibbleAlignedFrame = bitLength >= NIBBLE_LENGTH && bitLength % NIBBLE_LENGTH === 0;
-  if (
-    !hasNibbleAlignedFrame &&
-    !isTrailingChecksumNibble({ bitLength, checksumIndexes })
-  ) {
+  if (!hasNibbleAlignedFrame && !isTrailingChecksumNibble({ bitLength, checksumIndexes })) {
     return 'unknown';
   }
   const expectedByKind: Record<Exclude<TrainerChecksumKind, 'unknown'>, boolean> = {
@@ -357,7 +350,8 @@ const overlayGeneratedBits = ({
       }
       const encodedBits = encodeFieldBits({ field, optionId });
       if (!encodedBits) {
-        const paramLabel = schema.params.find((param) => param.id === field.paramId)?.label ?? field.paramId;
+        const paramLabel =
+          schema.params.find((param) => param.id === field.paramId)?.label ?? field.paramId;
         return { needsInputReason: `${paramLabel} ${optionId} has no encoding yet` };
       }
       const writtenBits = writeFieldBits({
@@ -434,10 +428,12 @@ const unresolvedNeedsInputReason = ({
     if (templateOptionId === undefined && optionId === schema.anchorValues[field.paramId]) {
       continue;
     }
-    const paramLabel = schema.params.find((param) => param.id === field.paramId)?.label ?? field.paramId;
+    const paramLabel =
+      schema.params.find((param) => param.id === field.paramId)?.label ?? field.paramId;
     const optionLabel =
-      schema.params.find((param) => param.id === field.paramId)?.options.find((option) => option.id === optionId)
-        ?.label ?? optionId;
+      schema.params
+        .find((param) => param.id === field.paramId)
+        ?.options.find((option) => option.id === optionId)?.label ?? optionId;
     return `${paramLabel} ${optionLabel} uses a different frame — capture this combo`;
   }
   return undefined;
@@ -464,7 +460,8 @@ export const generateTrainerGrid = ({
     const id = trainerStateId(paramValues);
     const label = formatTrainerStateLabel({ schema, paramValues });
     const templateSample = findTemplateSample({
-      samples: majoritySamples.length > 0 ? majoritySamples : samples.filter((sample) => sample.bits),
+      samples:
+        majoritySamples.length > 0 ? majoritySamples : samples.filter((sample) => sample.bits),
       schema,
       paramValues,
     });
@@ -474,34 +471,34 @@ export const generateTrainerGrid = ({
       : 'No usable captured frame to start from';
     if (unresolvedReason) {
       if (leftoverCapture) {
-          return {
-            id,
-            kind: 'frame',
-            paramValues,
-            label,
-            status: 'captured',
-            bits: leftoverCapture.bits,
-          };
-        }
         return {
           id,
           kind: 'frame',
           paramValues,
           label,
-          status: 'needs_input',
-          needsInputReason: unresolvedReason,
+          status: 'captured',
+          bits: leftoverCapture.bits,
         };
       }
-      if (!templateSample) {
-        return {
-          id,
-          kind: 'frame',
-          paramValues,
-          label,
-          status: 'needs_input',
-          needsInputReason: 'No usable captured frame to start from',
-        };
-      }
+      return {
+        id,
+        kind: 'frame',
+        paramValues,
+        label,
+        status: 'needs_input',
+        needsInputReason: unresolvedReason,
+      };
+    }
+    if (!templateSample) {
+      return {
+        id,
+        kind: 'frame',
+        paramValues,
+        label,
+        status: 'needs_input',
+        needsInputReason: 'No usable captured frame to start from',
+      };
+    }
     const generated = overlayGeneratedBits({
       schema,
       inference,
@@ -541,41 +538,42 @@ export const generateTrainerGrid = ({
   const consistentSamples = samples.filter(
     (sample) => !listInconsistentSampleIds(samples).has(sample.id),
   );
-  const commandCells: TrainerGeneratedCell[] = listSeparateCommandStates(schema).map((paramValues) => {
-    const id = trainerStateId(paramValues);
-    const separateParam = schema.params.find(
-      (param) => isSeparateCommandParam(param) && paramValues[param.id] !== undefined,
-    );
-    const optionId = separateParam ? paramValues[separateParam.id] : undefined;
-    const optionLabel =
-      separateParam?.options.find((option) => option.id === optionId)?.label ?? optionId ?? '';
-    const label = `${separateParam?.label ?? 'Command'} ${optionLabel} (separate command)`;
-    const capturedSample = separateParam
-      ? findMatchingSample({
-          samples: consistentSamples,
+  const commandCells: TrainerGeneratedCell[] = listSeparateCommandStates(schema).map(
+    (paramValues) => {
+      const id = trainerStateId(paramValues);
+      const separateParam = schema.params.find(
+        (param) => isSeparateCommandParam(param) && paramValues[param.id] !== undefined,
+      );
+      const optionId = separateParam ? paramValues[separateParam.id] : undefined;
+      const optionLabel =
+        separateParam?.options.find((option) => option.id === optionId)?.label ?? optionId ?? '';
+      const label = `${separateParam?.label ?? 'Command'} ${optionLabel} (separate command)`;
+      const capturedSample = separateParam
+        ? findMatchingSample({
+            samples: consistentSamples,
+            paramValues,
+            unlockedParamId: separateParam.id,
+          })
+        : undefined;
+      if (capturedSample) {
+        return {
+          id,
+          kind: 'command',
           paramValues,
-          unlockedParamId: separateParam.id,
-        })
-      : undefined;
-    if (capturedSample) {
+          label,
+          status: 'captured',
+          bits: capturedSample.bits,
+        };
+      }
       return {
         id,
         kind: 'command',
         paramValues,
         label,
-        status: 'captured',
-        bits: capturedSample.bits,
+        status: 'needs_input',
+        needsInputReason: `${separateParam?.label ?? 'This command'} is sent on its own packet — capture this option`,
       };
-    }
-    return {
-      id,
-      kind: 'command',
-      paramValues,
-      label,
-      status: 'needs_input',
-      needsInputReason: `${separateParam?.label ?? 'This command'} is sent on its own packet — capture this option`,
-    };
-  });
+    },
+  );
   return { checksumKind, cells: [...frameCells, ...commandCells] };
 };
-
