@@ -4,6 +4,7 @@ import {
   buildDefaultIrHead,
   catalogCodeToLocalIrFrame,
   classifyCatalogIrCode,
+  localIrFrameFromCatalogButton,
 } from '../irFrame.js';
 
 describe('classifyCatalogIrCode', () => {
@@ -42,6 +43,26 @@ describe('catalogCodeToLocalIrFrame', () => {
 
   it('strips a device-log 1 prefix on a LAN base64 blob', () => {
     const frame = catalogCodeToLocalIrFrame('1BB4LmVTniQ==');
+    assert.equal(frame.head, '');
+    assert.equal(frame.key1, '1BB4LmVTniQ==');
+  });
+});
+
+describe('localIrFrameFromCatalogButton', () => {
+  it('sends catalog key blobs as library keys, not learned pulses', () => {
+    const frame = localIrFrameFromCatalogButton({
+      source: 'key',
+      code: 'BB4LmVTniQ==',
+    });
+    assert.equal(frame.head, buildDefaultIrHead());
+    assert.equal(frame.key1, '0BB4LmVTniQ==');
+  });
+
+  it('keeps learned LAN blobs on the learned key1 prefix', () => {
+    const frame = localIrFrameFromCatalogButton({
+      source: 'learned',
+      code: 'BB4LmVTniQ==',
+    });
     assert.equal(frame.head, '');
     assert.equal(frame.key1, '1BB4LmVTniQ==');
   });

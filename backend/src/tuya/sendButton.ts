@@ -2,7 +2,7 @@ import { SEND_PATH_CLOUD, SEND_PATH_LOCAL } from '../constants.js';
 import type { Catalog, CatalogButton, SendResult } from '../types.js';
 import { sendCloudButton } from './cloudSend.js';
 import type { TuyaCloudClient } from './cloudClient.js';
-import { catalogCodeToLocalIrFrame, classifyCatalogIrCode } from './irFrame.js';
+import { classifyCatalogIrCode, localIrFrameFromCatalogButton } from './irFrame.js';
 import { clearCachedLocalTarget, resolveLocalBlaster, sendLocalIrCode } from './localSend.js';
 
 const findButton = (catalog: Catalog, buttonId: string): CatalogButton => {
@@ -69,7 +69,7 @@ export const sendCatalogButton = async ({
     try {
       await sendLocalIrCode({
         localDevice,
-        frame: catalogCodeToLocalIrFrame(irCode),
+        frame: localIrFrameFromCatalogButton(button),
       });
       console.log(
         `Local IR sent to ${localDevice.host} for ${button.keyName} (${classifyCatalogIrCode(irCode)})`,

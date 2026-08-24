@@ -64,6 +64,14 @@ export const buildDefaultIrHead = (): string => {
   );
 };
 
+const libraryKeyFrame = (code: string): LocalIrFrame => {
+  const key = stripDeviceLogKeyPrefix(code);
+  return {
+    head: buildDefaultIrHead(),
+    key1: `${LIBRARY_KEY1_PREFIX}${key}`,
+  };
+};
+
 export const catalogCodeToLocalIrFrame = (code: string): LocalIrFrame => {
   const trimmedCode = code.trim();
   if (!trimmedCode) {
@@ -76,13 +84,26 @@ export const catalogCodeToLocalIrFrame = (code: string): LocalIrFrame => {
     return { head: '', key1: `${LEARNED_KEY1_PREFIX}${lanBase64}` };
   }
   if (kind === 'symbol_key') {
-    const key = stripDeviceLogKeyPrefix(trimmedCode);
-    return {
-      head: buildDefaultIrHead(),
-      key1: `${LIBRARY_KEY1_PREFIX}${key}`,
-    };
+    return libraryKeyFrame(trimmedCode);
   }
 
   const lanBase64 = stripLearnedKey1Prefix(trimmedCode);
   return { head: '', key1: `${LEARNED_KEY1_PREFIX}${lanBase64}` };
+};
+
+export const localIrFrameFromCatalogButton = ({
+  code,
+  source,
+}: {
+  code?: string;
+  source: 'key' | 'learned';
+}): LocalIrFrame => {
+  if (!code) {
+    throw new Error('IR code is empty');
+  }
+  const kind = classifyCatalogIrCode(code);
+  if (source === 'key' && kind !== 'cloud_hex') {
+    return libraryKeyFrame(code);
+  }
+  return catalogCodeToLocalIrFrame(code);
 };

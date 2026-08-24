@@ -202,23 +202,23 @@ describe('listTrainerClimatePackets', () => {
       previousState: { isOn: false, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
       nextState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
     });
-    assert.deepEqual(
-      packetsAt24.map((packet) => packet.bits),
-      ['1000100000000000100100101011'],
-    );
+    assert.equal(packetsAt24.length, 2);
+    assert.equal(packetsAt24[0]?.bits.slice(12, 16), '0000');
+    assert.equal(packetsAt24[1]?.bits.slice(12, 16), '1000');
     const packetsAt18 = listTrainerClimatePackets({
       trainer,
       previousState: { isOn: false, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
       nextState: { isOn: true, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
     });
     assert.equal(packetsAt18[0]?.bits, '1000100000000000001100100101');
-    assert.equal(packetsAt18.length, 1);
+    assert.equal(packetsAt18[1]?.bits, '1000100000001000001100101101');
+    assert.equal(packetsAt18.length, 2);
     const alreadyOnPackets = listTrainerClimatePackets({
       trainer,
       previousState: { isOn: true, mode: 'cool', temperatureC: 24, fanMode: 'medium' },
       nextState: { isOn: true, mode: 'cool', temperatureC: 18, fanMode: 'medium' },
     });
-    assert.equal(alreadyOnPackets[0]?.bits, '1000100000000000001100100101');
+    assert.equal(alreadyOnPackets[0]?.bits, '1000100000001000001100101101');
     assert.equal(alreadyOnPackets.length, 1);
   });
 

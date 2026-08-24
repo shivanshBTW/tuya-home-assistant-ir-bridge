@@ -132,11 +132,10 @@ export const listTrainerClimatePackets = ({
   const packets: { bits: string; label: string }[] = [];
   const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
   const isTurningOn = !previousState?.isOn;
-  if (!onCell?.bits) {
-    if (isTurningOn) {
+  if (isTurningOn) {
+    if (!onCell?.bits) {
       throw new Error('Capture Train Power On before Home Assistant or Google can turn the AC on');
     }
-  } else {
     const overlaidOn = overlayGeneratedBits({
       schema: trainer.schema,
       inference,
@@ -145,31 +144,29 @@ export const listTrainerClimatePackets = ({
       checksumKind: generation.checksumKind,
     });
     if (!overlaidOn.bits) {
-      if (isTurningOn) {
-        throw new Error(
-          overlaidOn.needsInputReason ??
-            'Could not write the last climate state onto the Power On packet',
-        );
-      }
-    } else {
-      packets.push({ bits: overlaidOn.bits, label: onCell.label });
+      throw new Error(
+        overlaidOn.needsInputReason ??
+          'Could not write the last climate state onto the Power On packet',
+      );
     }
-  }
-  if (packets.length > 0) {
-    return packets;
+    packets.push({ bits: overlaidOn.bits, label: onCell.label });
   }
   const cell = generation.cells.find(
     (frameCell) =>
       frameCell.kind === 'frame' && isSameParamValues(frameCell.paramValues, paramValues),
   );
   if (!cell?.bits) {
+    if (packets.length > 0) {
+      return packets;
+    }
     throw new Error(
       `No trained climate frame for ${Object.entries(paramValues)
         .map(([paramId, optionId]) => `${paramId}=${optionId}`)
         .join(' ')}`,
     );
   }
-  return [{ bits: cell.bits, label: cell.label }];
+  packets.push({ bits: cell.bits, label: cell.label });
+  return packets;
 };
 
 export const listTrainerPowerSavingPackets = ({
