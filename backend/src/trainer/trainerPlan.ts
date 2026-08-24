@@ -12,6 +12,10 @@ export const TRAINER_PARAM_SPEED = 'speed';
 export const TRAINER_PARAM_POWER_SAVING = 'powerSaving';
 export const TRAINER_PARAM_POWER = 'power';
 export const TRAINER_DEVICE_REMOTE_ID = 'trainer';
+const TRAINER_POWER_OPTIONS = [
+  { id: 'on', label: 'On' },
+  { id: 'off', label: 'Off' },
+] as const;
 const TEMP_SWEEP_INDEXES = [0, 1] as const;
 
 const findParam = (schema: TrainerSchema, paramId: string): TrainerParam => {
@@ -60,8 +64,23 @@ export const normalizeTrainerSchema = (schema: TrainerSchema): TrainerSchema => 
       id: TRAINER_PARAM_POWER,
       label: 'Power',
       isSeparateCommand: true,
-      options: [{ id: 'off', label: 'Off' }],
+      options: TRAINER_POWER_OPTIONS.map((option) => ({ ...option })),
     });
+  } else {
+    const powerParamIndex = params.findIndex((param) => param.id === TRAINER_PARAM_POWER);
+    const powerParam = params[powerParamIndex];
+    if (powerParam) {
+      const optionIds = new Set(powerParam.options.map((option) => option.id));
+      params[powerParamIndex] = {
+        ...powerParam,
+        options: [
+          ...powerParam.options,
+          ...TRAINER_POWER_OPTIONS.filter((option) => !optionIds.has(option.id)).map((option) => ({
+            ...option,
+          })),
+        ],
+      };
+    }
   }
   return {
     ...schema,
@@ -498,7 +517,7 @@ export const createDefaultAcTrainerSchema = (): TrainerSchema => {
         id: TRAINER_PARAM_POWER,
         label: 'Power',
         isSeparateCommand: true,
-        options: [{ id: 'off', label: 'Off' }],
+        options: TRAINER_POWER_OPTIONS.map((option) => ({ ...option })),
       },
     ],
     constraints: {

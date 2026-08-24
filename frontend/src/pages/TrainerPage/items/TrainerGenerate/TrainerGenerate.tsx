@@ -307,24 +307,28 @@ export const TrainerGenerate: FC<Props> = ({
                 )}
                 {commandCells.some((cell) => cell.paramValues.power) && (
                   <Stack spacing={1}>
-                    <Typography variant="subtitle1">Power Off (Google / HA)</Typography>
+                    <Typography variant="subtitle1">Power (Google / HA)</Typography>
                     <Alert severity="info">
-                      Capture the Off packet so Home Assistant and Google Home can turn the AC off.
+                      Capture On and Off. Google turns the unit on with On, then the mode/temp/fan
+                      frame. Off is its own packet.
                     </Alert>
                     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                       {commandCells
                         .filter((cell) => cell.paramValues.power)
-                        .map((cell) => (
-                          <Button
-                            key={cell.id}
-                            variant={cell.bits ? 'contained' : 'outlined'}
-                            onClick={() => (cell.bits ? onFireCell(cell) : onListenCell(cell))}
-                            disabled={cell.bits ? isFirePending : isListenPending}
-                          >
-                            Off
-                            {cell.bits ? '' : ' · capture'}
-                          </Button>
-                        ))}
+                        .map((cell) => {
+                          const optionId = cell.paramValues.power ?? '';
+                          return (
+                            <Button
+                              key={cell.id}
+                              variant={cell.bits ? 'contained' : 'outlined'}
+                              onClick={() => (cell.bits ? onFireCell(cell) : onListenCell(cell))}
+                              disabled={cell.bits ? isFirePending : isListenPending}
+                            >
+                              {optionLabel({ schema, paramId: 'power', optionId })}
+                              {cell.bits ? '' : ' · capture'}
+                            </Button>
+                          );
+                        })}
                     </Stack>
                     {commandCells
                       .filter((cell) => cell.paramValues.power && cell.status === 'needs_input')

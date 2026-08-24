@@ -571,7 +571,11 @@ export class MqttPublisher {
     try {
       if (isTrainerDevice) {
         const trainer = await this.jsonStore.readTrainer();
-        const packets = listTrainerClimatePackets({ trainer, nextState });
+        const packets = listTrainerClimatePackets({
+          trainer,
+          previousState: previousClimateState,
+          nextState,
+        });
         await this.sendTrainerPackets({ deviceId, packets, catalog });
         return;
       }

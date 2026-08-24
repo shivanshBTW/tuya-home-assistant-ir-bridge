@@ -175,11 +175,15 @@ describe('generateTrainerGrid', () => {
         .length,
       4,
     );
+    const powerOn = generation.cells.find(
+      (cell) => cell.kind === 'command' && cell.paramValues.power === 'on',
+    );
     const powerOff = generation.cells.find(
       (cell) => cell.kind === 'command' && cell.paramValues.power === 'off',
     );
+    assert.equal(powerOn?.status, 'needs_input');
     assert.equal(powerOff?.status, 'needs_input');
-    assert.equal(generation.cells.filter((cell) => cell.kind === 'command').length, 5);
+    assert.equal(generation.cells.filter((cell) => cell.kind === 'command').length, 6);
   });
 
   it('keeps power saving off when leftover climate labels match a different packet', () => {

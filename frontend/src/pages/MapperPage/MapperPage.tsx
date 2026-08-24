@@ -271,8 +271,8 @@ export const MapperPage: FC<Props> = ({
           {isSelectedTrainerDevice && (
             <Alert severity="info" sx={{ flexShrink: 0 }}>
               This mapping sends the Train remote — not the Bedroom AC library. Google Home sees
-              cool, dry, fan only, 16–30°C, and low/medium/high. Capture Power Off on Train so
-              Google can turn the unit off. Power saving is a Home Assistant select only.
+              cool, dry, fan only, 16–30°C, and low/medium/high. Capture Power On and Off on Train.
+              Power saving is a Home Assistant select only.
             </Alert>
           )}
           {!isSelectedTrainerDevice &&

@@ -91,24 +91,46 @@ export const findTrainerCommandCell = ({
   );
 };
 
+const findTrainerPowerCell = ({
+  generation,
+  optionId,
+}: {
+  generation: ReturnType<typeof trainerGeneration>;
+  optionId: 'on' | 'off';
+}) => {
+  return generation.cells.find(
+    (cell) => cell.kind === 'command' && cell.paramValues[TRAINER_PARAM_POWER] === optionId,
+  );
+};
+
 export const listTrainerClimatePackets = ({
   trainer,
+  previousState,
   nextState,
 }: {
   trainer: TrainerFile;
+  previousState?: ClimateAssumedState;
   nextState: ClimateAssumedState;
 }): { bits: string; label: string }[] => {
   const generation = trainerGeneration(trainer);
   if (!nextState.isOn) {
-    const offCell = generation.cells.find(
-      (cell) => cell.kind === 'command' && cell.paramValues[TRAINER_PARAM_POWER] === 'off',
-    );
+    const offCell = findTrainerPowerCell({ generation, optionId: 'off' });
     if (!offCell?.bits) {
       throw new Error(
         'Capture Train Power Off before Home Assistant or Google can turn the AC off',
       );
     }
     return [{ bits: offCell.bits, label: offCell.label }];
+  }
+  const packets: { bits: string; label: string }[] = [];
+  if (!previousState?.isOn) {
+    const onCell = findTrainerPowerCell({ generation, optionId: 'on' });
+    if (!onCell?.bits) {
+      throw new Error(
+        'Capture Train Power On before Home Assistant or Google can turn the AC on',
+      );
+    }
+    packets.push({ bits: onCell.bits, label: onCell.label });
   }
   const paramValues = climateStateToTrainerFrameValues(nextState);
   const cell = generation.cells.find(
@@ -122,7 +144,8 @@ export const listTrainerClimatePackets = ({
         .join(' ')}`,
     );
   }
-  return [{ bits: cell.bits, label: cell.label }];
+  packets.push({ bits: cell.bits, label: cell.label });
+  return packets;
 };
 
 export const listTrainerPowerSavingPackets = ({
